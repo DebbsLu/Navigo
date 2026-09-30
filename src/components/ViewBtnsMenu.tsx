@@ -64,21 +64,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#13111C', // Fondo del contenedor principal
+    backgroundColor: 'rgba(24, 22, 34, 0.75)', // Fondo del contenedor principal
     borderColor: '#1E1D29',     // Borde del contenedor principal
     borderWidth: 1.5,
     borderRadius: 24,          // Bordes muy redondeados como en la imagen
-    padding: 12,
-    width: '100%',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    width: 'auto',
+    alignSelf: 'center',
   },
   button: {
-    width: 80,
-    height: 80,
+    width: 52,
+    height: 52,
     backgroundColor: '#181622', // Fondo de cada botón
     borderWidth: 1.5,
-    borderRadius: 20,          // Esquinas redondeadas internas
+    borderRadius: 14,          // Esquinas redondeadas internas
     alignItems: 'center',
     justifyContent: 'center',
+    marginHorizontal: 20,
   },
 });
 
