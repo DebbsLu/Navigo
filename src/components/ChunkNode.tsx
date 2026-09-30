@@ -1,17 +1,34 @@
-import React from 'react';
+import React, {
+  useRef,
+} from 'react';
+
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
+  TextInput,
+  PanResponder,
 } from 'react-native';
-import BtnClose from './BtnClose'; // Tu componente existente de cerrar
 
-// Tipos de estado posibles para el chunk
-export type ChunkStatus = 'avanzando' | 'completado' | 'no_iniciado';
+import BtnClose from './BtnClose';
 
-// Posición de los puntos de conexión
-export type ConnectionSide = 'top' | 'bottom' | 'left' | 'right';
+
+// =======================================================
+// TIPOS
+// =======================================================
+
+export type ChunkStatus =
+  | 'avanzando'
+  | 'completado'
+  | 'no_iniciado';
+
+export type ConnectionSide =
+  | 'top'
+  | 'bottom'
+  | 'left'
+  | 'right';
+
 
 interface ConnectionPointState {
   top?: boolean;
@@ -20,237 +37,763 @@ interface ConnectionPointState {
   right?: boolean;
 }
 
-interface ChunkNodeProps {
-  title: string;
-  description: string;
-  status?: ChunkStatus;
-  subStepButtonText?: string;
-  connections?: ConnectionPointState; // Indica qué lados están conectados
-  onClose?: () => void;
-  onPressSubStep?: () => void;
-  onConnectPointPress?: (side: ConnectionSide) => void;
+
+interface ChunkPosition {
+  x: number;
+  y: number;
 }
 
-// Configuración de colores según el estado
+
+interface ChunkNodeProps {
+  title: string;
+
+  description: string;
+
+  position?: ChunkPosition;
+
+  status?: ChunkStatus;
+
+  selected?: boolean;
+
+  onSelect?: () => void;
+
+  onMove?: (
+    startX: number,
+    startY: number,
+    dx: number,
+    dy: number
+  ) => void;
+
+  onTitleChange?: (
+    title: string
+  ) => void;
+
+  onDescriptionChange?: (
+    description: string
+  ) => void;
+
+  onStatusChange?: (
+    status: ChunkStatus
+  ) => void;
+
+  subStepButtonText?: string;
+
+  connections?: ConnectionPointState;
+
+  onClose?: () => void;
+
+  onPressSubStep?: () => void;
+
+  onConnectPointPress?: (
+    side: ConnectionSide
+  ) => void;
+}
+
+
+// =======================================================
+// CONSTANTES
+// =======================================================
+
+const DOT_SIZE = 14;
+
+
+// =======================================================
+// ESTADOS
+// =======================================================
+
 const STATUS_CONFIG: Record<
   ChunkStatus,
-  { label: string; color: string }
+  {
+    label: string;
+    color: string;
+  }
 > = {
+
   avanzando: {
     label: 'Avanzando',
     color: '#853ACF',
   },
+
   completado: {
     label: 'Completado',
     color: '#C694EB',
   },
+
   no_iniciado: {
     label: 'No iniciado',
     color: '#DED1EB',
   },
+
 };
 
-const ChunkNode: React.FC<ChunkNodeProps> = ({
-  title,
-  description,
-  status = 'avanzando',
-  subStepButtonText = '+ Añadir subpaso',
-  connections = {},
-  onClose,
-  onPressSubStep,
-  onConnectPointPress,
-}) => {
-  const currentStatus = STATUS_CONFIG[status];
 
-  // Helper para obtener el color del punto de conexión (100% o 10% opacidad)
-  const getConnectionPointStyle = (isConnected?: boolean) => ({
-    backgroundColor: isConnected ? '#9793C7' : 'rgba(151, 147, 199, 0.10)',
-  });
+// =======================================================
+// SIGUIENTE ESTADO
+// =======================================================
+
+const getNextStatus = (
+  status: ChunkStatus
+): ChunkStatus => {
+
+  switch (status) {
+
+    case 'no_iniciado':
+      return 'avanzando';
+
+    case 'avanzando':
+      return 'completado';
+
+    case 'completado':
+      return 'no_iniciado';
+
+    default:
+      return 'no_iniciado';
+  }
+};
+
+
+// =======================================================
+// COMPONENTE
+// =======================================================
+
+const ChunkNode: React.FC<
+  ChunkNodeProps
+> = ({
+
+  title,
+
+  description,
+
+  position,
+
+  status = 'no_iniciado',
+
+  selected = false,
+
+  onSelect,
+
+  onMove,
+
+  onTitleChange,
+
+  onDescriptionChange,
+
+  onStatusChange,
+
+  subStepButtonText =
+    '+ Añadir subpaso',
+
+  connections = {},
+
+  onClose,
+
+  onPressSubStep,
+
+  onConnectPointPress,
+
+}) => {
+
+  const currentStatus =
+    STATUS_CONFIG[status];
+
+
+  // =====================================================
+  // DRAG DEL CHUNK
+  // =====================================================
+
+  const dragResponder = useRef(
+
+    PanResponder.create({
+
+      // -----------------------------------------------
+      // No capturar un toque simple.
+      // -----------------------------------------------
+
+      onStartShouldSetPanResponder:
+        () => false,
+
+
+      // -----------------------------------------------
+      // Capturar solamente cuando
+      // realmente empieza a arrastrarse.
+      // -----------------------------------------------
+
+      onMoveShouldSetPanResponder: (
+        _event,
+        gestureState
+      ) => {
+
+        return (
+          Math.abs(
+            gestureState.dx
+          ) > 8 ||
+
+          Math.abs(
+            gestureState.dy
+          ) > 8
+        );
+      },
+
+
+      // -----------------------------------------------
+      // Inicio del arrastre
+      // -----------------------------------------------
+
+      onPanResponderGrant: () => {
+
+        onSelect?.();
+      },
+
+
+      // -----------------------------------------------
+      // Movimiento
+      // -----------------------------------------------
+
+      onPanResponderMove: (
+        _event,
+        gestureState
+      ) => {
+
+        if (!position) {
+          return;
+        }
+
+        onMove?.(
+
+          position.x,
+
+          position.y,
+
+          gestureState.dx,
+
+          gestureState.dy
+        );
+      },
+
+
+      // -----------------------------------------------
+      // Fin
+      // -----------------------------------------------
+
+      onPanResponderRelease:
+        () => {},
+
+
+      onPanResponderTerminate:
+        () => {},
+
+    })
+
+  ).current;
+
+
+  // =====================================================
+  // RENDER
+  // =====================================================
 
   return (
-    <View style={styles.wrapper}>
-      {/* Texto de Estado externo en la parte superior */}
-      <Text style={[styles.statusText, { color: currentStatus.color }]}>
+
+    <View
+      style={styles.wrapper}
+      onTouchStart={onSelect}
+    >
+
+      {/* =============================================== */}
+      {/* ESTADO */}
+      {/* =============================================== */}
+
+      <Text
+        style={[
+          styles.statusText,
+
+          {
+            color:
+              currentStatus.color,
+          },
+        ]}
+      >
         {currentStatus.label}
       </Text>
 
-      {/* Contenedor principal del Chunk */}
-      <View style={styles.cardContainer}>
-        {/* Encabezado: Estado (Círculo) + Botón Cerrar */}
-        <View style={styles.header}>
+
+      {/* =============================================== */}
+      {/* TARJETA */}
+      {/* =============================================== */}
+
+      <View
+        style={[
+          styles.cardContainer,
+
+          selected &&
+            styles.cardContainerSelected,
+        ]}
+      >
+
+        {/* ============================================= */}
+        {/* HEADER */}
+        {/* ============================================= */}
+
+        <View
+          style={styles.header}
+        >
+
+          {/* ------------------------------------------- */}
+          {/* ESTADO */}
+          {/* ------------------------------------------- */}
+
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() =>
+              onStatusChange?.(
+                getNextStatus(
+                  status
+                )
+              )
+            }
+          >
+
+            <View
+              style={[
+                styles.statusDot,
+
+                {
+                  backgroundColor:
+                    currentStatus.color,
+                },
+              ]}
+            />
+
+          </TouchableOpacity>
+
+
+          {/* ------------------------------------------- */}
+          {/* ZONA DE ARRASTRE */}
+          {/* ------------------------------------------- */}
+
           <View
-            style={[
-              styles.statusDot,
-              { backgroundColor: currentStatus.color },
-            ]}
+            style={
+              styles.dragHandle
+            }
+            {...dragResponder.panHandlers}
           />
-          <BtnClose onPress={() => onClose?.()} />
-        </View> 
 
-        {/* Título del paso */}
-        <Text style={styles.titleText}>{title}</Text>
 
-        {/* Caja contenedora de la descripción */}
-        <View style={styles.descriptionBox}>
-          <Text style={styles.descriptionText}>{description}</Text>
+          {/* ------------------------------------------- */}
+          {/* CERRAR */}
+          {/* ------------------------------------------- */}
+
+          <BtnClose
+            onPress={() =>
+              onClose?.()
+            }
+          />
+
         </View>
 
-        {/* Botón inferior para Subpaso */}
+
+        {/* ============================================= */}
+        {/* TÍTULO */}
+        {/* ============================================= */}
+
+        <TextInput
+          value={title}
+          onChangeText={
+            onTitleChange
+          }
+          placeholder="Título del paso"
+          placeholderTextColor="#777380"
+          style={
+            styles.titleInput
+          }
+          multiline
+        />
+
+
+        {/* ============================================= */}
+        {/* DESCRIPCIÓN */}
+        {/* ============================================= */}
+
+        <View
+          style={
+            styles.descriptionBox
+          }
+        >
+
+          <TextInput
+            value={description}
+            onChangeText={
+              onDescriptionChange
+            }
+            placeholder="Escribe aquí los detalles..."
+            placeholderTextColor="#777380"
+            style={
+              styles.descriptionInput
+            }
+            multiline
+            textAlignVertical="top"
+          />
+
+        </View>
+
+
+        {/* ============================================= */}
+        {/* AÑADIR SUBPASO */}
+        {/* ============================================= */}
+
         <TouchableOpacity
           activeOpacity={0.7}
-          style={styles.subStepButton}
-          onPress={onPressSubStep}
+          style={
+            styles.subStepButton
+          }
+          onPress={() =>
+            onPressSubStep?.()
+          }
         >
-          <Text style={styles.subStepButtonText}>{subStepButtonText}</Text>
+
+          <Text
+            style={
+              styles.subStepButtonText
+            }
+          >
+            {subStepButtonText}
+          </Text>
+
         </TouchableOpacity>
 
-        {/* ---- 4 Botones / Puntos de conexión en los costados ---- */}
 
-        {/* Punto Superior */}
+        {/* ============================================= */}
+        {/* CONEXIÓN SUPERIOR */}
+        {/* ============================================= */}
+
         <TouchableOpacity
           activeOpacity={0.8}
+          onPress={() =>
+            onConnectPointPress?.(
+              'top'
+            )
+          }
           style={[
             styles.connectionDot,
             styles.dotTop,
-            getConnectionPointStyle(connections.top),
+
+            {
+              backgroundColor:
+                connections.top
+                  ? '#9793C7'
+                  : 'rgba(151, 147, 199, 0.10)',
+            },
           ]}
-          onPress={() => onConnectPointPress?.('top')}
         />
 
-        {/* Punto Inferior */}
+
+        {/* ============================================= */}
+        {/* CONEXIÓN INFERIOR */}
+        {/* ============================================= */}
+
         <TouchableOpacity
           activeOpacity={0.8}
+          onPress={() =>
+            onConnectPointPress?.(
+              'bottom'
+            )
+          }
           style={[
             styles.connectionDot,
             styles.dotBottom,
-            getConnectionPointStyle(connections.bottom),
+
+            {
+              backgroundColor:
+                connections.bottom
+                  ? '#9793C7'
+                  : 'rgba(151, 147, 199, 0.10)',
+            },
           ]}
-          onPress={() => onConnectPointPress?.('bottom')}
         />
 
-        {/* Punto Izquierdo */}
+
+        {/* ============================================= */}
+        {/* CONEXIÓN IZQUIERDA */}
+        {/* ============================================= */}
+
         <TouchableOpacity
           activeOpacity={0.8}
+          onPress={() =>
+            onConnectPointPress?.(
+              'left'
+            )
+          }
           style={[
             styles.connectionDot,
             styles.dotLeft,
-            getConnectionPointStyle(connections.left),
+
+            {
+              backgroundColor:
+                connections.left
+                  ? '#9793C7'
+                  : 'rgba(151, 147, 199, 0.10)',
+            },
           ]}
-          onPress={() => onConnectPointPress?.('left')}
         />
 
-        {/* Punto Derecho */}
+
+        {/* ============================================= */}
+        {/* CONEXIÓN DERECHA */}
+        {/* ============================================= */}
+
         <TouchableOpacity
           activeOpacity={0.8}
+          onPress={() =>
+            onConnectPointPress?.(
+              'right'
+            )
+          }
           style={[
             styles.connectionDot,
             styles.dotRight,
-            getConnectionPointStyle(connections.right),
+
+            {
+              backgroundColor:
+                connections.right
+                  ? '#9793C7'
+                  : 'rgba(151, 147, 199, 0.10)',
+            },
           ]}
-          onPress={() => onConnectPointPress?.('right')}
         />
+
       </View>
+
     </View>
   );
 };
 
+
 export default ChunkNode;
 
-const DOT_SIZE = 16; // Tamaño de los círculos de conexión
 
-const styles = StyleSheet.create({
-  wrapper: {
-    alignItems: 'flex-start',
-    paddingTop: 24, // Espacio para el texto superior y el botón top
-    paddingHorizontal: 12, // Espacio para los botones laterales
-  },
-  statusText: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 6,
-    marginLeft: 16,
-  },
-  cardContainer: {
-    width: 280,
-    backgroundColor: '#181622',
-    borderColor: '#1E1D29',
-    borderWidth: 1.5,
-    borderRadius: 20,
-    padding: 16,
-    position: 'relative',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 8,
-  },
-  statusDot: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-  },
-  titleText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 14,
-    paddingRight: 10,
-  },
-  descriptionBox: {
-    backgroundColor: '#1F1D2C',
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 14,
-  },
-  descriptionText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  subStepButton: {
-    backgroundColor: '#181622',
-    borderRadius: 12,
-    paddingVertical: 10,
-    alignItems: 'flex-start',
-    paddingLeft: 4,
-  },
-  subStepButtonText: {
-    color: '#3B3947',
-    fontSize: 15,
-    fontWeight: '600',
-  },
+// =======================================================
+// ESTILOS
+// =======================================================
 
-  /* Estilos para los 4 puntos de conexión */
-  connectionDot: {
-    width: DOT_SIZE,
-    height: DOT_SIZE,
-    borderRadius: DOT_SIZE / 2,
-    position: 'absolute',
-    zIndex: 10,
-  },
-  dotTop: {
-    top: -DOT_SIZE / 2,
-    alignSelf: 'center',
-    left: '50%',
-    transform: [{ translateX: -(DOT_SIZE / 2) }],
-  },
-  dotBottom: {
-    bottom: -DOT_SIZE / 2,
-    alignSelf: 'center',
-    left: '50%',
-    transform: [{ translateX: -(DOT_SIZE / 2) }],
-  },
-  dotLeft: {
-    left: -DOT_SIZE / 2,
-    top: '50%',
-    transform: [{ translateY: -(DOT_SIZE / 2) }],
-  },
-  dotRight: {
-    right: -DOT_SIZE / 2,
-    top: '50%',
-    transform: [{ translateY: -(DOT_SIZE / 2) }],
-  },
-});
+const styles =
+  StyleSheet.create({
+
+    wrapper: {
+      alignItems:
+        'flex-start',
+
+      paddingTop: 24,
+
+      paddingHorizontal: 12,
+    },
+
+
+    statusText: {
+      fontSize: 14,
+
+      fontWeight: '600',
+
+      marginBottom: 6,
+
+      marginLeft: 16,
+    },
+
+
+    cardContainer: {
+      width: 280,
+
+      backgroundColor:
+        '#181622',
+
+      borderColor:
+        '#1E1D29',
+
+      borderWidth: 1.5,
+
+      borderRadius: 20,
+
+      padding: 16,
+
+      position: 'relative',
+    },
+
+
+    cardContainerSelected: {
+      borderColor:
+        '#853ACF',
+
+      borderWidth: 2,
+    },
+
+
+    header: {
+      flexDirection:
+        'row',
+
+      alignItems:
+        'center',
+
+      gap: 10,
+
+      marginBottom: 8,
+    },
+
+
+    dragHandle: {
+      flex: 1,
+
+      height: 32,
+    },
+
+
+    statusDot: {
+      width: 14,
+
+      height: 14,
+
+      borderRadius: 7,
+    },
+
+
+    titleInput: {
+      color: '#FFFFFF',
+
+      fontSize: 18,
+
+      fontWeight: 'bold',
+
+      marginBottom: 14,
+
+      paddingRight: 10,
+    },
+
+
+    descriptionBox: {
+      backgroundColor:
+        '#1F1D2C',
+
+      borderRadius: 14,
+
+      paddingHorizontal: 14,
+
+      paddingVertical: 12,
+
+      marginBottom: 14,
+    },
+
+
+    descriptionInput: {
+      color: '#FFFFFF',
+
+      fontSize: 14,
+
+      lineHeight: 20,
+
+      minHeight: 80,
+    },
+
+
+    subStepButton: {
+      backgroundColor:
+        '#181622',
+
+      borderRadius: 12,
+
+      paddingVertical: 10,
+
+      alignItems:
+        'flex-start',
+
+      paddingLeft: 4,
+    },
+
+
+    subStepButtonText: {
+      color: '#3B3947',
+
+      fontSize: 15,
+
+      fontWeight: '600',
+    },
+
+
+    connectionDot: {
+      width: DOT_SIZE,
+
+      height: DOT_SIZE,
+
+      borderRadius:
+        DOT_SIZE / 2,
+
+      position:
+        'absolute',
+
+      zIndex: 10,
+    },
+
+
+    dotTop: {
+      top:
+        -DOT_SIZE / 2,
+
+      alignSelf:
+        'center',
+
+      left: '50%',
+
+      transform: [
+        {
+          translateX:
+            -(DOT_SIZE / 2),
+        },
+      ],
+    },
+
+
+    dotBottom: {
+      bottom:
+        -DOT_SIZE / 2,
+
+      alignSelf:
+        'center',
+
+      left: '50%',
+
+      transform: [
+        {
+          translateX:
+            -(DOT_SIZE / 2),
+        },
+      ],
+    },
+
+
+    dotLeft: {
+      left:
+        -DOT_SIZE / 2,
+
+      top: '50%',
+
+      transform: [
+        {
+          translateY:
+            -(DOT_SIZE / 2),
+        },
+      ],
+    },
+
+
+    dotRight: {
+      right:
+        -DOT_SIZE / 2,
+
+      top: '50%',
+
+      transform: [
+        {
+          translateY:
+            -(DOT_SIZE / 2),
+        },
+      ],
+    },
+
+  });
