@@ -19,16 +19,23 @@ import {
 } from '@react-navigation/native';
 
 import TexturedScreen from '../components/TexturedScreen';
-
 import CanvasMenu from '../components/CanvasMenu';
-
 import CanvasGestureLayer from '../components/CanvasGestureLayer';
+import FloatingMenu from '../components/FloatingMenu';
+import ModalProblemas from '../components/modal_problemas';
 
 import ChunkNode, {
   ChunkStatus,
   ConnectionSide,
 } from '../components/ChunkNode';
 
+import ProblemNode from '../components/ChunkProblem';
+import SolutionNode from '../components/SolutionNode';
+
+import {
+  ProblemType,
+  ProblemSolution,
+} from '../data/ProblemData';
 
 // =======================================================
 // NAVEGACIÓN
@@ -47,7 +54,6 @@ type InfinityCanvasRouteProp =
     'InfinityCanvas'
   >;
 
-
 // =======================================================
 // STORAGE
 // =======================================================
@@ -57,9 +63,43 @@ const GET_CANVAS_KEY = (
 ) =>
   `@canvas_chunks_${taskId}`;
 
+const GET_PROBLEMS_KEY = (
+  taskId: string
+) =>
+  `@canvas_problems_${taskId}`;
+
+const GET_SOLUTIONS_KEY = (
+  taskId: string
+) =>
+  `@canvas_solutions_${taskId}`;
+
+const GET_CONNECTIONS_KEY = (
+  taskId: string
+) =>
+  `@canvas_connections_${taskId}`;
 
 // =======================================================
-// DATOS DE CHUNK
+// DATOS DE POSICIÓN
+// =======================================================
+
+interface NodePosition {
+  x: number;
+  y: number;
+}
+
+// =======================================================
+// ESTADO VISUAL DE CONEXIONES
+// =======================================================
+
+interface NodeConnections {
+  top?: boolean;
+  bottom?: boolean;
+  left?: boolean;
+  right?: boolean;
+}
+
+// =======================================================
+// CHUNK
 // =======================================================
 
 interface ChunkData {
@@ -71,23 +111,70 @@ interface ChunkData {
 
   status: ChunkStatus;
 
-  // Permite saber quién es el padre
-  // de un subpaso.
   parentId?: string;
 
-  position: {
-    x: number;
-    y: number;
-  };
+  position: NodePosition;
 
-  connections: {
-    top?: boolean;
-    bottom?: boolean;
-    left?: boolean;
-    right?: boolean;
-  };
+  connections: NodeConnections;
 }
 
+// =======================================================
+// PROBLEM NODE
+// =======================================================
+
+interface ProblemNodeData {
+  id: string;
+
+  title: string;
+
+  description: string;
+
+  position: NodePosition;
+
+  connections: NodeConnections;
+}
+
+// =======================================================
+// SOLUTION NODE
+// =======================================================
+
+interface SolutionNodeData {
+  id: string;
+
+  title?: string;
+
+  description: string;
+
+  position: NodePosition;
+
+  connections: NodeConnections;
+}
+
+// =======================================================
+// CONEXIÓN
+// =======================================================
+
+interface CanvasConnection {
+  id: string;
+
+  fromNodeId: string;
+
+  fromSide: ConnectionSide;
+
+  toNodeId: string;
+
+  toSide: ConnectionSide;
+}
+
+// =======================================================
+// CONEXIÓN PENDIENTE
+// =======================================================
+
+interface PendingConnection {
+  nodeId: string;
+
+  side: ConnectionSide;
+}
 
 // =======================================================
 // CONFIGURACIÓN DEL CANVAS
@@ -104,6 +191,17 @@ const WORLD_SIZE = 5000;
 const WORLD_CENTER =
   WORLD_SIZE / 2;
 
+// =======================================================
+// DIMENSIONES DE NODOS
+// =======================================================
+
+const NODE_WIDTH = 280;
+
+const NODE_HEIGHT = 250;
+
+const NODE_LEFT_OFFSET = 12;
+
+const NODE_TOP_OFFSET = 24;
 
 // =======================================================
 // COMPONENTE
@@ -124,61 +222,118 @@ const InfinityCanvas: React.FC =
       title,
     } = route.params;
 
+    // ===================================================
+    // CHUNKS
+    // ===================================================
+
+    const [
+      chunks,
+      setChunks,
+    ] = useState<ChunkData[]>([]);
 
     // ===================================================
-    // ESTADO DE CHUNKS
+    // PROBLEMAS
     // ===================================================
 
-    const [chunks, setChunks] =
-      useState<ChunkData[]>([]);
+    const [
+      problemNodes,
+      setProblemNodes,
+    ] = useState<ProblemNodeData[]>([]);
+
+    // ===================================================
+    // SOLUCIONES
+    // ===================================================
+
+    const [
+      solutionNodes,
+      setSolutionNodes,
+    ] = useState<SolutionNodeData[]>([]);
+
+    // ===================================================
+    // CARGA
+    // ===================================================
 
     const [
       isLoaded,
       setIsLoaded,
     ] = useState(false);
 
+    // ===================================================
+    // MODAL
+    // ===================================================
+
     const [
-      selectedChunkId,
-      setSelectedChunkId,
+      showProblemsModal,
+      setShowProblemsModal,
+    ] = useState(false);
+
+    // ===================================================
+    // SELECCIÓN
+    // ===================================================
+
+    const [
+      selectedNodeId,
+      setSelectedNodeId,
     ] = useState<string | null>(
       null
     );
 
+    // ===================================================
+    // CONEXIONES
+    // ===================================================
+
+    const [
+      connections,
+      setConnections,
+    ] = useState<
+      CanvasConnection[]
+    >([]);
+
+    // ===================================================
+    // CONEXIÓN PENDIENTE
+    // ===================================================
+
+    const [
+      pendingConnection,
+      setPendingConnection,
+    ] =
+      useState<PendingConnection | null>(
+        null
+      );
 
     // ===================================================
     // PAN
     // ===================================================
 
-    const pan = useRef(
-      new Animated.ValueXY({
-        x: 0,
-        y: 0,
-      })
-    ).current;
-
+    const pan =
+      useRef(
+        new Animated.ValueXY({
+          x: 0,
+          y: 0,
+        })
+      ).current;
 
     // ===================================================
     // ZOOM
     // ===================================================
 
-    const zoom = useRef(
-      new Animated.Value(
-        INITIAL_ZOOM
-      )
-    ).current;
-
+    const zoom =
+      useRef(
+        new Animated.Value(
+          INITIAL_ZOOM
+        )
+      ).current;
 
     // ===================================================
     // CARGAR CANVAS
     // ===================================================
 
     useEffect(() => {
-      loadCanvasChunks();
+      loadCanvas();
     }, [taskId]);
 
-
     // ===================================================
-    // GUARDAR CANVAS
+    // GUARDAR CHUNKS
     // ===================================================
 
     useEffect(() => {
@@ -190,53 +345,1271 @@ const InfinityCanvas: React.FC =
       isLoaded,
     ]);
 
+    // ===================================================
+    // GUARDAR PROBLEMAS
+    // ===================================================
+
+    useEffect(() => {
+      if (isLoaded) {
+        saveProblemNodes(
+          problemNodes
+        );
+      }
+    }, [
+      problemNodes,
+      isLoaded,
+    ]);
 
     // ===================================================
-    // LOAD
+    // GUARDAR SOLUCIONES
     // ===================================================
 
-    const loadCanvasChunks =
+    useEffect(() => {
+      if (isLoaded) {
+        saveSolutionNodes(
+          solutionNodes
+        );
+      }
+    }, [
+      solutionNodes,
+      isLoaded,
+    ]);
+
+    // ===================================================
+    // GUARDAR CONEXIONES
+    // ===================================================
+
+    useEffect(() => {
+      if (isLoaded) {
+        saveConnections(
+          connections
+        );
+      }
+    }, [
+      connections,
+      isLoaded,
+    ]);
+
+    // ===================================================
+    // MENÚ FLOTANTE
+    // ===================================================
+
+    const handleFloatingMenuOption = (
+      option: string
+    ) => {
+
+      if (
+        option ===
+        'Algo te detiene: Problemas, Dist...'
+      ) {
+        setShowProblemsModal(true);
+      }
+    };
+
+    // ===================================================
+    // CREAR PROBLEMA + SOLUCIÓN
+    // ===================================================
+
+    const createProblemAndSolution = (
+      problem: ProblemType,
+      solutionTitle: string,
+      solutionDescription: string
+    ) => {
+
+      // -----------------------------------------------
+      // IDs
+      // -----------------------------------------------
+
+      const problemId =
+        `problem_${Date.now()}`;
+
+      const solutionId =
+        `solution_${Date.now()}_${Math.random()}`;
+
+      // -----------------------------------------------
+      // POSICIONES
+      // -----------------------------------------------
+
+      const baseX =
+        WORLD_CENTER - 140;
+
+      const baseY =
+        WORLD_CENTER - 125;
+
+      const problemPosition = {
+        x: baseX,
+        y: baseY,
+      };
+
+      const solutionPosition = {
+        x: baseX + 360,
+        y: baseY,
+      };
+
+      // -----------------------------------------------
+      // PROBLEMA
+      // -----------------------------------------------
+
+      const newProblem: ProblemNodeData = {
+        id: problemId,
+
+        title: problem.title,
+
+        description:
+          problem.description,
+
+        position:
+          problemPosition,
+
+        connections: {
+          right: true,
+        },
+      };
+
+      // -----------------------------------------------
+      // SOLUCIÓN
+      // -----------------------------------------------
+
+      const newSolution: SolutionNodeData = {
+        id: solutionId,
+
+        title:
+          solutionTitle,
+
+        description:
+          solutionDescription,
+
+        position:
+          solutionPosition,
+
+        connections: {
+          left: true,
+        },
+      };
+
+      // -----------------------------------------------
+      // CONEXIÓN PROBLEMA → SOLUCIÓN
+      // -----------------------------------------------
+
+      const newConnection:
+        CanvasConnection = {
+          id:
+            `problem_solution_${Date.now()}_${Math.random()}`,
+
+          fromNodeId:
+            problemId,
+
+          fromSide:
+            'right',
+
+          toNodeId:
+            solutionId,
+
+          toSide:
+            'left',
+        };
+
+      // -----------------------------------------------
+      // AGREGAR
+      // -----------------------------------------------
+
+      setProblemNodes(
+        prev => [
+          ...prev,
+          newProblem,
+        ]
+      );
+
+      setSolutionNodes(
+        prev => [
+          ...prev,
+          newSolution,
+        ]
+      );
+
+      setConnections(
+        prev => [
+          ...prev,
+          newConnection,
+        ]
+      );
+
+      // -----------------------------------------------
+      // SELECCIONAR PROBLEMA
+      // -----------------------------------------------
+
+      setSelectedNodeId(
+        problemId
+      );
+
+      // -----------------------------------------------
+      // CERRAR MODAL
+      // -----------------------------------------------
+
+      setShowProblemsModal(false);
+    };
+
+    // ===================================================
+    // SOLUCIÓN PREDEFINIDA
+    // ===================================================
+
+    const handleSelectSolution = (
+      problem: ProblemType,
+      solution: ProblemSolution
+    ) => {
+
+      createProblemAndSolution(
+        problem,
+        solution.title,
+        solution.description
+      );
+    };
+
+    // ===================================================
+    // SOLUCIÓN PERSONALIZADA
+    // ===================================================
+
+    const handleAddCustomSolution = (
+      text: string,
+      problem: ProblemType
+    ) => {
+
+      createProblemAndSolution(
+        problem,
+        text,
+        'Solución personalizada por el usuario.'
+      );
+    };
+
+    // ===================================================
+    // CREAR CHUNK
+    // ===================================================
+
+    const handleAddChunk = () => {
+
+      const index =
+        chunks.length;
+
+      const newChunk: ChunkData = {
+        id:
+          Date.now().toString(),
+
+        title:
+          `Paso ${
+            index + 1
+          }: Subactividad`,
+
+        description:
+          'Escribe aquí los detalles del paso...',
+
+        status:
+          'no_iniciado',
+
+        position: {
+          x:
+            WORLD_CENTER -
+            140 +
+            (index % 3) *
+              340,
+
+          y:
+            WORLD_CENTER -
+            120 +
+            Math.floor(
+              index / 3
+            ) *
+              300,
+        },
+
+        connections: {},
+      };
+
+      setChunks(
+        prev => [
+          ...prev,
+          newChunk,
+        ]
+      );
+
+      setSelectedNodeId(
+        newChunk.id
+      );
+    };
+
+    // ===================================================
+    // CREAR SUBPASO
+    // ===================================================
+
+    const handleAddSubStep = (
+      parentId: string
+    ) => {
+
+      const parent =
+        chunks.find(
+          chunk =>
+            chunk.id ===
+            parentId
+        );
+
+      if (!parent) {
+        return;
+      }
+
+      const newChunk: ChunkData = {
+        id:
+          Date.now().toString(),
+
+        title:
+          `Paso ${
+            chunks.length + 1
+          }: Subactividad`,
+
+        description:
+          'Escribe aquí los detalles del subpaso...',
+
+        status:
+          'no_iniciado',
+
+        parentId,
+
+        position: {
+          x:
+            parent.position.x +
+            340,
+
+          y:
+            parent.position.y,
+        },
+
+        connections: {},
+      };
+
+      setChunks(
+        prev => [
+          ...prev,
+          newChunk,
+        ]
+      );
+
+      setSelectedNodeId(
+        newChunk.id
+      );
+    };
+
+    // ===================================================
+    // CAMBIAR TÍTULO CHUNK
+    // ===================================================
+
+    const handleChangeChunkTitle = (
+      id: string,
+      newTitle: string
+    ) => {
+
+      setChunks(
+        prev =>
+          prev.map(
+            chunk =>
+              chunk.id === id
+                ? {
+                    ...chunk,
+                    title:
+                      newTitle,
+                  }
+                : chunk
+          )
+      );
+    };
+
+    // ===================================================
+    // CAMBIAR DESCRIPCIÓN CHUNK
+    // ===================================================
+
+    const handleChangeChunkDescription = (
+      id: string,
+      newDescription: string
+    ) => {
+
+      setChunks(
+        prev =>
+          prev.map(
+            chunk =>
+              chunk.id === id
+                ? {
+                    ...chunk,
+                    description:
+                      newDescription,
+                  }
+                : chunk
+          )
+      );
+    };
+
+    // ===================================================
+    // CAMBIAR ESTADO CHUNK
+    // ===================================================
+
+    const handleChangeChunkStatus = (
+      id: string,
+      newStatus: ChunkStatus
+    ) => {
+
+      setChunks(
+        prev =>
+          prev.map(
+            chunk =>
+              chunk.id === id
+                ? {
+                    ...chunk,
+                    status:
+                      newStatus,
+                  }
+                : chunk
+          )
+      );
+    };
+
+    // ===================================================
+    // MOVER CHUNK
+    // ===================================================
+
+    const handleMoveChunk = (
+      id: string,
+      startX: number,
+      startY: number,
+      dx: number,
+      dy: number
+    ) => {
+
+      const currentZoom =
+        (zoom as any)
+          .__getValue();
+
+      const worldDx =
+        dx / currentZoom;
+
+      const worldDy =
+        dy / currentZoom;
+
+      setChunks(
+        prev =>
+          prev.map(
+            chunk =>
+              chunk.id === id
+                ? {
+                    ...chunk,
+
+                    position: {
+                      x:
+                        startX +
+                        worldDx,
+
+                      y:
+                        startY +
+                        worldDy,
+                    },
+                  }
+                : chunk
+          )
+      );
+    };
+
+    // ===================================================
+    // MOVER PROBLEMA
+    // ===================================================
+
+    const handleMoveProblem = (
+      id: string,
+      startX: number,
+      startY: number,
+      dx: number,
+      dy: number
+    ) => {
+
+      const currentZoom =
+        (zoom as any)
+          .__getValue();
+
+      const worldDx =
+        dx / currentZoom;
+
+      const worldDy =
+        dy / currentZoom;
+
+      setProblemNodes(
+        prev =>
+          prev.map(
+            node =>
+              node.id === id
+                ? {
+                    ...node,
+
+                    position: {
+                      x:
+                        startX +
+                        worldDx,
+
+                      y:
+                        startY +
+                        worldDy,
+                    },
+                  }
+                : node
+          )
+      );
+    };
+
+    // ===================================================
+    // MOVER SOLUCIÓN
+    // ===================================================
+
+    const handleMoveSolution = (
+      id: string,
+      startX: number,
+      startY: number,
+      dx: number,
+      dy: number
+    ) => {
+
+      const currentZoom =
+        (zoom as any)
+          .__getValue();
+
+      const worldDx =
+        dx / currentZoom;
+
+      const worldDy =
+        dy / currentZoom;
+
+      setSolutionNodes(
+        prev =>
+          prev.map(
+            node =>
+              node.id === id
+                ? {
+                    ...node,
+
+                    position: {
+                      x:
+                        startX +
+                        worldDx,
+
+                      y:
+                        startY +
+                        worldDy,
+                    },
+                  }
+                : node
+          )
+      );
+    };
+
+    // ===================================================
+    // OBTENER NODO
+    // ===================================================
+
+    const getNodeById = (
+      id: string
+    ) => {
+
+      const chunk =
+        chunks.find(
+          node => node.id === id
+        );
+
+      if (chunk) {
+        return {
+          type: 'chunk' as const,
+          node: chunk,
+        };
+      }
+
+      const problem =
+        problemNodes.find(
+          node => node.id === id
+        );
+
+      if (problem) {
+        return {
+          type: 'problem' as const,
+          node: problem,
+        };
+      }
+
+      const solution =
+        solutionNodes.find(
+          node => node.id === id
+        );
+
+      if (solution) {
+        return {
+          type: 'solution' as const,
+          node: solution,
+        };
+      }
+
+      return null;
+    };
+
+    // ===================================================
+    // ACTUALIZAR CONEXIONES VISUALES
+    // ===================================================
+
+    const activateConnectionPoint = (
+      nodeId: string,
+      side: ConnectionSide
+    ) => {
+
+      setChunks(
+        prev =>
+          prev.map(
+            node =>
+              node.id === nodeId
+                ? {
+                    ...node,
+
+                    connections: {
+                      ...node.connections,
+
+                      [side]:
+                        true,
+                    },
+                  }
+                : node
+          )
+      );
+
+      setProblemNodes(
+        prev =>
+          prev.map(
+            node =>
+              node.id === nodeId
+                ? {
+                    ...node,
+
+                    connections: {
+                      ...node.connections,
+
+                      [side]:
+                        true,
+                    },
+                  }
+                : node
+          )
+      );
+
+      setSolutionNodes(
+        prev =>
+          prev.map(
+            node =>
+              node.id === nodeId
+                ? {
+                    ...node,
+
+                    connections: {
+                      ...node.connections,
+
+                      [side]:
+                        true,
+                    },
+                  }
+                : node
+          )
+      );
+    };
+
+    // ===================================================
+    // CONEXIONES
+    // ===================================================
+
+    const handleConnectionPointPress = (
+      nodeId: string,
+      side: ConnectionSide
+    ) => {
+
+      // -----------------------------------------------
+      // PRIMER PUNTO
+      // -----------------------------------------------
+
+      if (
+        pendingConnection === null
+      ) {
+
+        setPendingConnection({
+          nodeId,
+          side,
+        });
+
+        return;
+      }
+
+      // -----------------------------------------------
+      // MISMO PUNTO
+      // -----------------------------------------------
+
+      if (
+        pendingConnection.nodeId ===
+          nodeId &&
+        pendingConnection.side ===
+          side
+      ) {
+
+        setPendingConnection(
+          null
+        );
+
+        return;
+      }
+
+      // -----------------------------------------------
+      // MISMO NODO
+      // -----------------------------------------------
+
+      if (
+        pendingConnection.nodeId ===
+        nodeId
+      ) {
+
+        setPendingConnection({
+          nodeId,
+          side,
+        });
+
+        return;
+      }
+
+      // -----------------------------------------------
+      // ¿YA EXISTE?
+      // -----------------------------------------------
+
+      const alreadyExists =
+        connections.some(
+          connection =>
+            (
+              connection.fromNodeId ===
+                pendingConnection.nodeId &&
+              connection.fromSide ===
+                pendingConnection.side &&
+              connection.toNodeId ===
+                nodeId &&
+              connection.toSide ===
+                side
+            ) ||
+            (
+              connection.fromNodeId ===
+                nodeId &&
+              connection.fromSide ===
+                side &&
+              connection.toNodeId ===
+                pendingConnection.nodeId &&
+              connection.toSide ===
+                pendingConnection.side
+            )
+        );
+
+      if (alreadyExists) {
+
+        setPendingConnection(
+          null
+        );
+
+        return;
+      }
+
+      // -----------------------------------------------
+      // CREAR CONEXIÓN
+      // -----------------------------------------------
+
+      const newConnection:
+        CanvasConnection = {
+          id:
+            `${Date.now()}-${Math.random()}`,
+
+          fromNodeId:
+            pendingConnection.nodeId,
+
+          fromSide:
+            pendingConnection.side,
+
+          toNodeId:
+            nodeId,
+
+          toSide:
+            side,
+        };
+
+      setConnections(
+        prev => [
+          ...prev,
+          newConnection,
+        ]
+      );
+
+      // -----------------------------------------------
+      // ACTIVAR PUNTOS
+      // -----------------------------------------------
+
+      activateConnectionPoint(
+        pendingConnection.nodeId,
+        pendingConnection.side
+      );
+
+      activateConnectionPoint(
+        nodeId,
+        side
+      );
+
+      // -----------------------------------------------
+      // TERMINAR
+      // -----------------------------------------------
+
+      setPendingConnection(
+        null
+      );
+    };
+
+    // ===================================================
+    // ELIMINAR NODO
+    // ===================================================
+
+    const handleRemoveNode = (
+      id: string
+    ) => {
+
+      // -----------------------------------------------
+      // CHUNK
+      // -----------------------------------------------
+
+      setChunks(
+        prev =>
+          prev.filter(
+            node => node.id !== id
+          )
+      );
+
+      // -----------------------------------------------
+      // PROBLEMA
+      // -----------------------------------------------
+
+      setProblemNodes(
+        prev =>
+          prev.filter(
+            node => node.id !== id
+          )
+      );
+
+      // -----------------------------------------------
+      // SOLUCIÓN
+      // -----------------------------------------------
+
+      setSolutionNodes(
+        prev =>
+          prev.filter(
+            node => node.id !== id
+          )
+      );
+
+      // -----------------------------------------------
+      // CONEXIONES
+      // -----------------------------------------------
+
+      setConnections(
+        prev =>
+          prev.filter(
+            connection =>
+              connection.fromNodeId !==
+                id &&
+              connection.toNodeId !==
+                id
+          )
+      );
+
+      // -----------------------------------------------
+      // CONEXIÓN PENDIENTE
+      // -----------------------------------------------
+
+      if (
+        pendingConnection?.nodeId ===
+        id
+      ) {
+
+        setPendingConnection(
+          null
+        );
+      }
+
+      // -----------------------------------------------
+      // SELECCIÓN
+      // -----------------------------------------------
+
+      if (
+        selectedNodeId === id
+      ) {
+
+        setSelectedNodeId(
+          null
+        );
+      }
+    };
+
+    // ===================================================
+    // SELECCIONAR
+    // ===================================================
+
+    const handleSelectNode = (
+      id: string
+    ) => {
+
+      setSelectedNodeId(id);
+    };
+
+    // ===================================================
+    // DESELECCIONAR
+    // ===================================================
+
+    const handleDeselectNode =
+      () => {
+
+        setSelectedNodeId(
+          null
+        );
+
+        if (
+          pendingConnection !==
+          null
+        ) {
+
+          setPendingConnection(
+            null
+          );
+        }
+      };
+
+    // ===================================================
+    // POSICIÓN DEL PUNTO
+    // ===================================================
+
+    const getConnectionPointPosition = (
+      node: {
+        position: NodePosition;
+      },
+      side: ConnectionSide
+    ) => {
+
+      const cardLeft =
+        node.position.x +
+        NODE_LEFT_OFFSET;
+
+      const cardTop =
+        node.position.y +
+        NODE_TOP_OFFSET;
+
+      if (
+        side === 'top'
+      ) {
+
+        return {
+          x:
+            cardLeft +
+            NODE_WIDTH / 2,
+
+          y:
+            cardTop,
+        };
+      }
+
+      if (
+        side === 'bottom'
+      ) {
+
+        return {
+          x:
+            cardLeft +
+            NODE_WIDTH / 2,
+
+          y:
+            cardTop +
+            NODE_HEIGHT,
+        };
+      }
+
+      if (
+        side === 'left'
+      ) {
+
+        return {
+          x:
+            cardLeft,
+
+          y:
+            cardTop +
+            NODE_HEIGHT / 2,
+        };
+      }
+
+      return {
+        x:
+          cardLeft +
+          NODE_WIDTH,
+
+        y:
+          cardTop +
+          NODE_HEIGHT / 2,
+      };
+    };
+
+    // ===================================================
+    // RENDER CONEXIÓN
+    // ===================================================
+
+    const renderConnection = (
+      connection: CanvasConnection
+    ) => {
+
+      const fromNode =
+        getNodeById(
+          connection.fromNodeId
+        );
+
+      const toNode =
+        getNodeById(
+          connection.toNodeId
+        );
+
+      if (
+        !fromNode ||
+        !toNode
+      ) {
+
+        return null;
+      }
+
+      const start =
+        getConnectionPointPosition(
+          fromNode.node,
+          connection.fromSide
+        );
+
+      const end =
+        getConnectionPointPosition(
+          toNode.node,
+          connection.toSide
+        );
+
+      const dx =
+        end.x - start.x;
+
+      const dy =
+        end.y - start.y;
+
+      const length =
+        Math.sqrt(
+          dx * dx +
+          dy * dy
+        );
+
+      const angle =
+        Math.atan2(
+          dy,
+          dx
+        ) *
+        (180 / Math.PI);
+
+      return (
+        <View
+          key={connection.id}
+          pointerEvents="none"
+          style={[
+            styles.connectionLine,
+            {
+              left: start.x,
+
+              top: start.y,
+
+              width: length,
+
+              transform: [
+                {
+                  rotate:
+                    `${angle}deg`,
+                },
+              ],
+            },
+          ]}
+        />
+      );
+    };
+
+    // ===================================================
+    // LOAD COMPLETO
+    // ===================================================
+
+    const loadCanvas =
       async () => {
+
         try {
-          const jsonValue =
+
+          // ---------------------------------------------
+          // CHUNKS
+          // ---------------------------------------------
+
+          const chunksJson =
             await AsyncStorage.getItem(
               GET_CANVAS_KEY(taskId)
             );
 
           if (
-            jsonValue !== null
+            chunksJson !== null
           ) {
+
             const savedChunks =
               JSON.parse(
-                jsonValue
+                chunksJson
               );
 
             setChunks(
               savedChunks
             );
+
           } else {
+
             setChunks([]);
           }
+
+          // ---------------------------------------------
+          // PROBLEMAS
+          // ---------------------------------------------
+
+          const problemsJson =
+            await AsyncStorage.getItem(
+              GET_PROBLEMS_KEY(taskId)
+            );
+
+          if (
+            problemsJson !== null
+          ) {
+
+            const savedProblems =
+              JSON.parse(
+                problemsJson
+              );
+
+            setProblemNodes(
+              savedProblems
+            );
+
+          } else {
+
+            setProblemNodes([]);
+          }
+
+          // ---------------------------------------------
+          // SOLUCIONES
+          // ---------------------------------------------
+
+          const solutionsJson =
+            await AsyncStorage.getItem(
+              GET_SOLUTIONS_KEY(taskId)
+            );
+
+          if (
+            solutionsJson !== null
+          ) {
+
+            const savedSolutions =
+              JSON.parse(
+                solutionsJson
+              );
+
+            setSolutionNodes(
+              savedSolutions
+            );
+
+          } else {
+
+            setSolutionNodes([]);
+          }
+
+          // ---------------------------------------------
+          // CONEXIONES
+          // ---------------------------------------------
+
+          const connectionsJson =
+            await AsyncStorage.getItem(
+              GET_CONNECTIONS_KEY(taskId)
+            );
+
+          if (
+            connectionsJson !== null
+          ) {
+
+            const savedConnections =
+              JSON.parse(
+                connectionsJson
+              );
+
+            /*
+             * Compatibilidad con las conexiones
+             * antiguas que usaban:
+             *
+             * fromChunkId
+             * toChunkId
+             */
+
+            const normalizedConnections =
+              savedConnections.map(
+                (connection: any) => ({
+                  id:
+                    connection.id,
+
+                  fromNodeId:
+                    connection.fromNodeId ??
+                    connection.fromChunkId,
+
+                  fromSide:
+                    connection.fromSide,
+
+                  toNodeId:
+                    connection.toNodeId ??
+                    connection.toChunkId,
+
+                  toSide:
+                    connection.toSide,
+                })
+              );
+
+            setConnections(
+              normalizedConnections
+            );
+
+          } else {
+
+            setConnections([]);
+          }
+
         } catch (e) {
+
           console.error(
-            'Error al cargar chunks:',
+            'Error al cargar canvas:',
             e
           );
+
         } finally {
+
           setIsLoaded(true);
         }
       };
 
-
     // ===================================================
-    // SAVE
+    // GUARDAR CHUNKS
     // ===================================================
 
     const saveCanvasChunks =
       async (
         chunksToSave: ChunkData[]
       ) => {
+
         try {
+
           const jsonValue =
             JSON.stringify(
               chunksToSave
@@ -246,7 +1619,9 @@ const InfinityCanvas: React.FC =
             GET_CANVAS_KEY(taskId),
             jsonValue
           );
+
         } catch (e) {
+
           console.error(
             'Error al guardar chunks:',
             e
@@ -254,357 +1629,89 @@ const InfinityCanvas: React.FC =
         }
       };
 
-
     // ===================================================
-    // CREAR CHUNK NORMAL
-    // ===================================================
-
-    const handleAddChunk =
-      () => {
-
-        const index =
-          chunks.length;
-
-        const newChunk: ChunkData =
-          {
-            id:
-              Date.now().toString(),
-
-            title:
-              `Paso ${
-                index + 1
-              }: Subactividad`,
-
-            description:
-              'Escribe aquí los detalles del paso...',
-
-            status:
-              'no_iniciado',
-
-            position: {
-              x:
-                WORLD_CENTER -
-                140 +
-                (index % 3) *
-                  340,
-
-              y:
-                WORLD_CENTER -
-                120 +
-                Math.floor(
-                  index / 3
-                ) *
-                  300,
-            },
-
-            connections: {},
-          };
-
-        setChunks(
-          prev => [
-            ...prev,
-            newChunk,
-          ]
-        );
-
-        setSelectedChunkId(
-          newChunk.id
-        );
-      };
-
-
-    // ===================================================
-    // CREAR SUBPASO
+    // GUARDAR PROBLEMAS
     // ===================================================
 
-    const handleAddSubStep =
-      (
-        parentId: string
+    const saveProblemNodes =
+      async (
+        nodesToSave:
+          ProblemNodeData[]
       ) => {
 
-        const parent =
-          chunks.find(
-            chunk =>
-              chunk.id ===
-              parentId
+        try {
+
+          await AsyncStorage.setItem(
+            GET_PROBLEMS_KEY(taskId),
+            JSON.stringify(
+              nodesToSave
+            )
           );
 
-        if (!parent) {
-          return;
-        }
+        } catch (e) {
 
-        const newChunk: ChunkData =
-          {
-            id:
-              Date.now().toString(),
-
-            title:
-              `Paso ${
-                chunks.length + 1
-              }: Subactividad`,
-
-            description:
-              'Escribe aquí los detalles del subpaso...',
-
-            status:
-              'no_iniciado',
-
-            parentId:
-
-              parentId,
-
-            position: {
-              x:
-                parent.position.x +
-                340,
-
-              y:
-                parent.position.y,
-            },
-
-            connections: {},
-          };
-
-        setChunks(
-          prev => [
-            ...prev,
-            newChunk,
-          ]
-        );
-
-        setSelectedChunkId(
-          newChunk.id
-        );
-      };
-
-
-    // ===================================================
-    // CAMBIAR TÍTULO
-    // ===================================================
-
-    const handleChangeChunkTitle =
-      (
-        id: string,
-        newTitle: string
-      ) => {
-
-        setChunks(
-          prev =>
-            prev.map(
-              chunk =>
-                chunk.id === id
-                  ? {
-                      ...chunk,
-                      title:
-                        newTitle,
-                    }
-                  : chunk
-            )
-        );
-      };
-
-
-    // ===================================================
-    // CAMBIAR DESCRIPCIÓN
-    // ===================================================
-
-    const handleChangeChunkDescription =
-      (
-        id: string,
-        newDescription: string
-      ) => {
-
-        setChunks(
-          prev =>
-            prev.map(
-              chunk =>
-                chunk.id === id
-                  ? {
-                      ...chunk,
-                      description:
-                        newDescription,
-                    }
-                  : chunk
-            )
-        );
-      };
-
-
-    // ===================================================
-    // CAMBIAR ESTADO
-    // ===================================================
-
-    const handleChangeChunkStatus =
-      (
-        id: string,
-        newStatus: ChunkStatus
-      ) => {
-
-        setChunks(
-          prev =>
-            prev.map(
-              chunk =>
-                chunk.id === id
-                  ? {
-                      ...chunk,
-                      status:
-                        newStatus,
-                    }
-                  : chunk
-            )
-        );
-      };
-
-
-    // ===================================================
-    // MOVER CHUNK
-    // ===================================================
-    //
-    // startX/startY:
-    // posición del chunk cuando comenzó
-    // el gesto.
-    //
-    // dx/dy:
-    // desplazamiento del dedo desde
-    // el inicio del gesto.
-    //
-    // Esto evita acumular dx/dy varias
-    // veces durante el mismo gesto.
-    // ===================================================
-
-    const handleMoveChunk =
-      (
-        id: string,
-        startX: number,
-        startY: number,
-        dx: number,
-        dy: number
-      ) => {
-
-        const currentZoom =
-          (zoom as any)
-            .__getValue();
-
-        const worldDx =
-          dx / currentZoom;
-
-        const worldDy =
-          dy / currentZoom;
-
-        setChunks(
-          prev =>
-            prev.map(
-              chunk =>
-                chunk.id === id
-                  ? {
-                      ...chunk,
-
-                      position: {
-                        x:
-                          startX +
-                          worldDx,
-
-                        y:
-                          startY +
-                          worldDy,
-                      },
-                    }
-                  : chunk
-            )
-        );
-      };
-
-
-    // ===================================================
-    // ELIMINAR CHUNK
-    // ===================================================
-
-    const handleRemoveChunk =
-      (
-        id: string
-      ) => {
-
-        setChunks(
-          prev =>
-            prev.filter(
-              chunk =>
-                chunk.id !== id
-            )
-        );
-
-        if (
-          selectedChunkId === id
-        ) {
-          setSelectedChunkId(
-            null
+          console.error(
+            'Error al guardar problemas:',
+            e
           );
         }
       };
 
-
     // ===================================================
-    // SELECCIONAR
-    // ===================================================
-
-    const handleSelectChunk =
-      (
-        id: string
-      ) => {
-        setSelectedChunkId(id);
-      };
-
-
-    // ===================================================
-    // DESELECCIONAR
+    // GUARDAR SOLUCIONES
     // ===================================================
 
-    const handleDeselectChunk =
-      () => {
-        setSelectedChunkId(
-          null
-        );
-      };
-
-
-    // ===================================================
-    // CONEXIONES
-    // ===================================================
-
-    const handleToggleConnection =
-      (
-        id: string,
-        side: ConnectionSide
+    const saveSolutionNodes =
+      async (
+        nodesToSave:
+          SolutionNodeData[]
       ) => {
 
-        setChunks(
-          prev =>
-            prev.map(
-              chunk => {
+        try {
 
-                if (
-                  chunk.id !== id
-                ) {
-                  return chunk;
-                }
-
-                return {
-                  ...chunk,
-
-                  connections: {
-                    ...chunk.connections,
-
-                    [side]:
-                      !chunk
-                        .connections[
-                        side
-                      ],
-                  },
-                };
-              }
+          await AsyncStorage.setItem(
+            GET_SOLUTIONS_KEY(taskId),
+            JSON.stringify(
+              nodesToSave
             )
-        );
+          );
+
+        } catch (e) {
+
+          console.error(
+            'Error al guardar soluciones:',
+            e
+          );
+        }
       };
 
+    // ===================================================
+    // GUARDAR CONEXIONES
+    // ===================================================
+
+    const saveConnections =
+      async (
+        connectionsToSave:
+          CanvasConnection[]
+      ) => {
+
+        try {
+
+          await AsyncStorage.setItem(
+            GET_CONNECTIONS_KEY(taskId),
+            JSON.stringify(
+              connectionsToSave
+            )
+          );
+
+        } catch (e) {
+
+          console.error(
+            'Error al guardar conexiones:',
+            e
+          );
+        }
+      };
 
     // ===================================================
     // RENDER
@@ -613,17 +1720,18 @@ const InfinityCanvas: React.FC =
     return (
       <TexturedScreen>
 
-        {/* ============================================= */}
-        {/* HEADER */}
-        {/* ============================================= */}
+        {/* =================================================
+            CONTENEDOR
+        ================================================= */}
 
-        <View
-          style={styles.container}
-        >
+        <View style={styles.container}>
 
-          <View
-            style={styles.header}
-          >
+          {/* ===============================================
+              HEADER
+          =============================================== */}
+
+          <View style={styles.header}>
+
             <Text
               style={
                 styles.taskTitleText
@@ -631,20 +1739,20 @@ const InfinityCanvas: React.FC =
             >
               {title}
             </Text>
+
           </View>
 
-
-          {/* =========================================== */}
-          {/* CANVAS */}
-          {/* =========================================== */}
+          {/* ===============================================
+              CANVAS
+          =============================================== */}
 
           <View
             style={styles.viewport}
           >
 
-            {/* ========================================= */}
-            {/* GESTOS DEL CANVAS */}
-            {/* ========================================= */}
+            {/* =============================================
+                GESTOS
+            ============================================= */}
 
             <CanvasGestureLayer
               pan={pan}
@@ -654,20 +1762,18 @@ const InfinityCanvas: React.FC =
               worldLeft={-2500}
               worldTop={-2500}
               onCanvasPress={
-                handleDeselectChunk
+                handleDeselectNode
               }
             />
 
-
-            {/* ========================================= */}
-            {/* MUNDO */}
-            {/* ========================================= */}
+            {/* =============================================
+                MUNDO
+            ============================================= */}
 
             <Animated.View
               pointerEvents="box-none"
               style={[
                 styles.world,
-
                 {
                   transform: [
                     {
@@ -688,182 +1794,426 @@ const InfinityCanvas: React.FC =
               ]}
             >
 
-              {/* ======================================= */}
-              {/* SIN CHUNKS */}
-              {/* ======================================= */}
+              {/* =========================================
+                  CONEXIONES
+              ========================================= */}
 
-              {chunks.length ===
-              0 ? (
+              <View
+                pointerEvents="none"
+                style={
+                  styles.connectionsLayer
+                }
+              >
 
-                <View
-                  style={
-                    styles.emptyCanvasContainer
-                  }
-                >
-                  <Text
-                    style={
-                      styles.emptyCanvasText
-                    }
+                {connections.map(
+                  connection =>
+                    renderConnection(
+                      connection
+                    )
+                )}
+
+              </View>
+
+              {/* =========================================
+                  CHUNKS
+              ========================================= */}
+
+              {chunks.map(
+                item => (
+
+                  <View
+                    key={item.id}
+                    style={[
+                      styles.nodeItemWrapper,
+                      {
+                        left:
+                          item.position.x,
+
+                        top:
+                          item.position.y,
+                      },
+                    ]}
                   >
-                    Aún no hay pasos
-                    creados en este
-                    lienzo
-                  </Text>
-                </View>
 
-              ) : (
+                    <ChunkNode
 
-                /* ===================================== */
-                /* CHUNKS */
-                /* ===================================== */
+                      title={
+                        item.title
+                      }
 
-                chunks.map(
-                  item => (
+                      description={
+                        item.description
+                      }
 
-                    <View
-                      key={item.id}
-                      style={[
-                        styles.chunkItemWrapper,
+                      position={
+                        item.position
+                      }
 
-                        {
-                          left:
-                            item
-                              .position
-                              .x,
+                      status={
+                        item.status
+                      }
 
-                          top:
-                            item
-                              .position
-                              .y,
-                        },
-                      ]}
-                    >
+                      selected={
+                        selectedNodeId ===
+                        item.id
+                      }
 
-                      <ChunkNode
-
-                        title={
-                          item.title
-                        }
-
-                        description={
-                          item.description
-                        }
-
-                        position={
-                          item.position
-                        }
-
-                        status={
-                          item.status
-                        }
-
-                        selected={
-                          selectedChunkId ===
+                      onSelect={() =>
+                        handleSelectNode(
                           item.id
-                        }
+                        )
+                      }
 
-                        onSelect={() =>
-                          handleSelectChunk(
-                            item.id
-                          )
-                        }
-
-                        onMove={(
+                      onMove={(
+                        startX,
+                        startY,
+                        dx,
+                        dy
+                      ) =>
+                        handleMoveChunk(
+                          item.id,
                           startX,
                           startY,
                           dx,
                           dy
-                        ) =>
-                          handleMoveChunk(
+                        )
+                      }
+
+                      connections={
+                        item.connections
+                      }
+
+                      onTitleChange={
+                        newTitle =>
+                          handleChangeChunkTitle(
                             item.id,
-                            startX,
-                            startY,
-                            dx,
-                            dy
+                            newTitle
                           )
-                        }
+                      }
 
-                        connections={
-                          item.connections
-                        }
-
-                        onTitleChange={
-                          newTitle =>
-                            handleChangeChunkTitle(
-                              item.id,
-                              newTitle
-                            )
-                        }
-
-                        onDescriptionChange={
-                          newDescription =>
-                            handleChangeChunkDescription(
-                              item.id,
-                              newDescription
-                            )
-                        }
-
-                        onStatusChange={
-                          newStatus =>
-                            handleChangeChunkStatus(
-                              item.id,
-                              newStatus
-                            )
-                        }
-
-                        onClose={() =>
-                          handleRemoveChunk(
-                            item.id
+                      onDescriptionChange={
+                        newDescription =>
+                          handleChangeChunkDescription(
+                            item.id,
+                            newDescription
                           )
-                        }
+                      }
 
-                        onPressSubStep={() =>
-                          handleAddSubStep(
-                            item.id
+                      onStatusChange={
+                        newStatus =>
+                          handleChangeChunkStatus(
+                            item.id,
+                            newStatus
                           )
-                        }
+                      }
 
-                        onConnectPointPress={
-                          side =>
-                            handleToggleConnection(
-                              item.id,
-                              side
-                            )
-                        }
-                      />
+                      onClose={() =>
+                        handleRemoveNode(
+                          item.id
+                        )
+                      }
 
-                    </View>
-                  )
+                      onPressSubStep={() =>
+                        handleAddSubStep(
+                          item.id
+                        )
+                      }
+
+                      onConnectPointPress={
+                        side =>
+                          handleConnectionPointPress(
+                            item.id,
+                            side
+                          )
+                      }
+
+                    />
+
+                  </View>
                 )
               )}
+
+              {/* =========================================
+                  PROBLEM NODES
+              ========================================= */}
+
+              {problemNodes.map(
+                item => (
+
+                  <View
+                    key={item.id}
+                    style={[
+                      styles.nodeItemWrapper,
+                      {
+                        left:
+                          item.position.x,
+
+                        top:
+                          item.position.y,
+                      },
+                    ]}
+                  >
+
+                    <ProblemNode
+
+                      title={
+                        item.title
+                      }
+
+                      description={
+                        item.description
+                      }
+
+                      position={
+                        item.position
+                      }
+
+                      selected={
+                        selectedNodeId ===
+                        item.id
+                      }
+
+                      onSelect={() =>
+                        handleSelectNode(
+                          item.id
+                        )
+                      }
+
+                      onMove={(
+                        startX,
+                        startY,
+                        dx,
+                        dy
+                      ) =>
+                        handleMoveProblem(
+                          item.id,
+                          startX,
+                          startY,
+                          dx,
+                          dy
+                        )
+                      }
+
+                      connections={
+                        item.connections
+                      }
+
+                      onClose={() =>
+                        handleRemoveNode(
+                          item.id
+                        )
+                      }
+
+                      onPressAddSolution={() => {
+                        setSelectedNodeId(
+                          item.id
+                        );
+
+                        setShowProblemsModal(
+                          true
+                        );
+                      }}
+
+                      onConnectPointPress={
+                        side =>
+                          handleConnectionPointPress(
+                            item.id,
+                            side
+                          )
+                      }
+
+                    />
+
+                  </View>
+                )
+              )}
+
+              {/* =========================================
+                  SOLUTION NODES
+              ========================================= */}
+
+              {solutionNodes.map(
+                item => (
+
+                  <View
+                    key={item.id}
+                    style={[
+                      styles.nodeItemWrapper,
+                      {
+                        left:
+                          item.position.x,
+
+                        top:
+                          item.position.y,
+                      },
+                    ]}
+                  >
+
+                    <SolutionNode
+
+                      title={
+                        item.title
+                      }
+
+                      description={
+                        item.description
+                      }
+
+                      position={
+                        item.position
+                      }
+
+                      selected={
+                        selectedNodeId ===
+                        item.id
+                      }
+
+                      onSelect={() =>
+                        handleSelectNode(
+                          item.id
+                        )
+                      }
+
+                      onMove={(
+                        startX,
+                        startY,
+                        dx,
+                        dy
+                      ) =>
+                        handleMoveSolution(
+                          item.id,
+                          startX,
+                          startY,
+                          dx,
+                          dy
+                        )
+                      }
+
+                      connections={
+                        item.connections
+                      }
+
+                      onClose={() =>
+                        handleRemoveNode(
+                          item.id
+                        )
+                      }
+
+                      onConnectPointPress={
+                        side =>
+                          handleConnectionPointPress(
+                            item.id,
+                            side
+                          )
+                      }
+
+                    />
+
+                  </View>
+                )
+              )}
+
+              {/* =========================================
+                  CANVAS VACÍO
+              ========================================= */}
+
+              {chunks.length === 0 &&
+                problemNodes.length === 0 &&
+                solutionNodes.length === 0 && (
+
+                  <View
+                    style={
+                      styles.emptyCanvasContainer
+                    }
+                  >
+
+                    <Text
+                      style={
+                        styles.emptyCanvasText
+                      }
+                    >
+                      Aún no hay pasos
+                      creados en este
+                      lienzo
+                    </Text>
+
+                  </View>
+
+                )}
 
             </Animated.View>
 
           </View>
 
-
-          {/* =========================================== */}
-          {/* MENÚ */}
-          {/* =========================================== */}
+          {/* =============================================
+              MENÚ INFERIOR
+          ============================================= */}
 
           <View
             style={
               styles.menuContainer
             }
           >
+
             <CanvasMenu
               onAddChunk={
                 handleAddChunk
               }
             />
+
           </View>
+
+          {/* =============================================
+              MENÚ FLOTANTE
+          ============================================= */}
+
+          <View
+            style={
+              styles.floatingMenuContainer
+            }
+          >
+
+            <FloatingMenu
+              onSelectOption={
+                handleFloatingMenuOption
+              }
+            />
+
+          </View>
+
+          {/* =============================================
+              MODAL DE PROBLEMAS
+          ============================================= */}
+
+          {showProblemsModal && (
+
+            <View
+              style={
+                styles.problemModalContainer
+              }
+            >
+
+              <ModalProblemas
+
+                onSelectSolution={
+                  handleSelectSolution
+                }
+
+                onAddCustomSolution={
+                  handleAddCustomSolution
+                }
+
+              />
+
+            </View>
+
+          )}
 
         </View>
 
       </TexturedScreen>
     );
   };
-
 
 // =======================================================
 // ESTILOS
@@ -878,54 +2228,188 @@ const styles =
 
     header: {
       paddingTop: 16,
+
       paddingHorizontal: 20,
-      alignItems: 'center',
+
+      alignItems:
+        'center',
+
       zIndex: 10,
     },
 
     taskTitleText: {
-      color: '#DED1EB',
+      color:
+        '#DED1EB',
+
       fontSize: 20,
-      fontWeight: 'bold',
+
+      fontWeight:
+        'bold',
     },
+
+    // ===================================================
+    // VIEWPORT
+    // ===================================================
 
     viewport: {
       flex: 1,
-      overflow: 'hidden',
+
+      overflow:
+        'hidden',
     },
+
+    // ===================================================
+    // MUNDO
+    // ===================================================
 
     world: {
-      position: 'absolute',
-      width: WORLD_SIZE,
-      height: WORLD_SIZE,
-      left: -2500,
-      top: -2500,
+      position:
+        'absolute',
+
+      width:
+        WORLD_SIZE,
+
+      height:
+        WORLD_SIZE,
+
+      left:
+        -2500,
+
+      top:
+        -2500,
     },
 
-    chunkItemWrapper: {
-      position: 'absolute',
+    // ===================================================
+    // CONEXIONES
+    // ===================================================
+
+    connectionsLayer: {
+      position:
+        'absolute',
+
+      left: 0,
+
+      top: 0,
+
+      width:
+        WORLD_SIZE,
+
+      height:
+        WORLD_SIZE,
+
+      zIndex: 0,
     },
+
+    connectionLine: {
+      position:
+        'absolute',
+
+      height: 3,
+
+      backgroundColor:
+        '#9793C7',
+
+      transformOrigin:
+        'left center',
+
+      borderRadius: 2,
+
+      zIndex: 0,
+    },
+
+    // ===================================================
+    // NODOS
+    // ===================================================
+
+    nodeItemWrapper: {
+      position:
+        'absolute',
+
+      zIndex: 2,
+    },
+
+    // ===================================================
+    // CANVAS VACÍO
+    // ===================================================
 
     emptyCanvasContainer: {
-      position: 'absolute',
-      left: 2300,
-      top: 2300,
-      alignItems: 'center',
+      position:
+        'absolute',
+
+      left:
+        2300,
+
+      top:
+        2300,
+
+      alignItems:
+        'center',
     },
 
     emptyCanvasText: {
-      color: '#3B3947',
+      color:
+        '#3B3947',
+
       fontSize: 16,
-      fontWeight: '500',
+
+      fontWeight:
+        '500',
     },
 
+    // ===================================================
+    // MENÚ INFERIOR
+    // ===================================================
+
     menuContainer: {
-      position: 'absolute',
-      bottom: 30,
+      position:
+        'absolute',
+
+      bottom:
+        30,
+
       left: 0,
+
       right: 0,
-      alignItems: 'center',
+
+      alignItems:
+        'center',
+
       zIndex: 100,
+    },
+
+    // ===================================================
+    // MENÚ FLOTANTE
+    // ===================================================
+
+    floatingMenuContainer: {
+      position:
+        'absolute',
+
+      bottom:
+        100,
+
+      left: 0,
+
+      right: 0,
+
+      zIndex: 200,
+    },
+
+    // ===================================================
+    // MODAL
+    // ===================================================
+
+    problemModalContainer: {
+      position:
+        'absolute',
+
+      left: 0,
+
+      right: 0,
+
+      top: 80,
+
+      zIndex: 300,
     },
   });
 
