@@ -1,4 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, {
+  useState,
+  useEffect,
+  useRef,
+} from 'react';
 
 import {
   View,
@@ -9,20 +13,26 @@ import {
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { useRoute, RouteProp } from '@react-navigation/native';
+import {
+  useRoute,
+  RouteProp,
+} from '@react-navigation/native';
 
 import TexturedScreen from '../components/TexturedScreen';
+
 import CanvasMenu from '../components/CanvasMenu';
+
 import CanvasGestureLayer from '../components/CanvasGestureLayer';
+
 import ChunkNode, {
   ChunkStatus,
   ConnectionSide,
 } from '../components/ChunkNode';
 
 
-// ---------------------------------------------------------
-// TIPOS DE NAVEGACIÓN
-// ---------------------------------------------------------
+// =======================================================
+// NAVEGACIÓN
+// =======================================================
 
 type RootStackParamList = {
   InfinityCanvas: {
@@ -31,29 +41,39 @@ type RootStackParamList = {
   };
 };
 
-type InfinityCanvasRouteProp = RouteProp<
-  RootStackParamList,
-  'InfinityCanvas'
->;
+type InfinityCanvasRouteProp =
+  RouteProp<
+    RootStackParamList,
+    'InfinityCanvas'
+  >;
 
 
-// ---------------------------------------------------------
+// =======================================================
 // STORAGE
-// ---------------------------------------------------------
+// =======================================================
 
-const GET_CANVAS_KEY = (taskId: string) =>
+const GET_CANVAS_KEY = (
+  taskId: string
+) =>
   `@canvas_chunks_${taskId}`;
 
 
-// ---------------------------------------------------------
-// DATOS DE CADA CHUNK
-// ---------------------------------------------------------
+// =======================================================
+// DATOS DE CHUNK
+// =======================================================
 
 interface ChunkData {
   id: string;
+
   title: string;
+
   description: string;
+
   status: ChunkStatus;
+
+  // Permite saber quién es el padre
+  // de un subpaso.
+  parentId?: string;
 
   position: {
     x: number;
@@ -69,594 +89,844 @@ interface ChunkData {
 }
 
 
-// ---------------------------------------------------------
+// =======================================================
 // CONFIGURACIÓN DEL CANVAS
-// ---------------------------------------------------------
+// =======================================================
 
 const INITIAL_ZOOM = 1;
 
 const MIN_ZOOM = 0.35;
+
 const MAX_ZOOM = 3;
 
+const WORLD_SIZE = 5000;
 
-// ---------------------------------------------------------
+const WORLD_CENTER =
+  WORLD_SIZE / 2;
+
+
+// =======================================================
 // COMPONENTE
-// ---------------------------------------------------------
+// =======================================================
 
-const Infinity_canvas: React.FC = () => {
+const InfinityCanvas: React.FC =
+  () => {
 
-  const route = useRoute<InfinityCanvasRouteProp>();
+    // ===================================================
+    // ROUTE
+    // ===================================================
 
-  const {
-    taskId,
-    title: taskTitle,
-  } = route.params;
+    const route =
+      useRoute<InfinityCanvasRouteProp>();
 
-
-  // -------------------------------------------------------
-  // CHUNKS
-  // -------------------------------------------------------
-
-  const [chunks, setChunks] = useState<ChunkData[]>([]);
-
-  const [isLoaded, setIsLoaded] = useState(false);
-
-  // Chunk actualmente seleccionado
-  const [selectedChunkId, setSelectedChunkId] =
-  useState<string | null>(null);
-
-  // -------------------------------------------------------
-  // POSICIÓN DEL CANVAS
-  // -------------------------------------------------------
-
-  const pan = useRef(
-    new Animated.ValueXY({
-      x: 0,
-      y: 0,
-    })
-  ).current;
+    const {
+      taskId,
+      title,
+    } = route.params;
 
 
-  // -------------------------------------------------------
-  // ZOOM
-  // -------------------------------------------------------
+    // ===================================================
+    // ESTADO DE CHUNKS
+    // ===================================================
 
-  const zoom = useRef(
-    new Animated.Value(INITIAL_ZOOM)
-  ).current;
+    const [chunks, setChunks] =
+      useState<ChunkData[]>([]);
 
+    const [
+      isLoaded,
+      setIsLoaded,
+    ] = useState(false);
 
-  const zoomValue = useRef(INITIAL_ZOOM);
-
-  
-
-  // -------------------------------------------------------
-  // CARGAR CHUNKS
-  // -------------------------------------------------------
-
-  useEffect(() => {
-    loadCanvasChunks();
-  }, [taskId]);
+    const [
+      selectedChunkId,
+      setSelectedChunkId,
+    ] = useState<string | null>(
+      null
+    );
 
 
-  // -------------------------------------------------------
-  // GUARDAR CHUNKS
-  // -------------------------------------------------------
+    // ===================================================
+    // PAN
+    // ===================================================
 
-  useEffect(() => {
-
-    if (isLoaded) {
-      saveCanvasChunks(chunks);
-    }
-
-  }, [chunks, isLoaded]);
-
-  // -------------------------------------------------------
-  // SELECCIÓN DE CHUNKS
-  // -------------------------------------------------------
-
-  const handleSelectChunk = (id: string) => {
-    setSelectedChunkId(id);
-  };
-
-  const handleDeselectChunk = () => {
-    setSelectedChunkId(null);
-  };
+    const pan = useRef(
+      new Animated.ValueXY({
+        x: 0,
+        y: 0,
+      })
+    ).current;
 
 
-  // -------------------------------------------------------
-  // LOAD
-  // -------------------------------------------------------
+    // ===================================================
+    // ZOOM
+    // ===================================================
 
-  const loadCanvasChunks = async () => {
+    const zoom = useRef(
+      new Animated.Value(
+        INITIAL_ZOOM
+      )
+    ).current;
 
-    try {
 
-      const jsonValue =
-        await AsyncStorage.getItem(
-          GET_CANVAS_KEY(taskId)
+    // ===================================================
+    // CARGAR CANVAS
+    // ===================================================
+
+    useEffect(() => {
+      loadCanvasChunks();
+    }, [taskId]);
+
+
+    // ===================================================
+    // GUARDAR CANVAS
+    // ===================================================
+
+    useEffect(() => {
+      if (isLoaded) {
+        saveCanvasChunks(chunks);
+      }
+    }, [
+      chunks,
+      isLoaded,
+    ]);
+
+
+    // ===================================================
+    // LOAD
+    // ===================================================
+
+    const loadCanvasChunks =
+      async () => {
+        try {
+          const jsonValue =
+            await AsyncStorage.getItem(
+              GET_CANVAS_KEY(taskId)
+            );
+
+          if (
+            jsonValue !== null
+          ) {
+            const savedChunks =
+              JSON.parse(
+                jsonValue
+              );
+
+            setChunks(
+              savedChunks
+            );
+          } else {
+            setChunks([]);
+          }
+        } catch (e) {
+          console.error(
+            'Error al cargar chunks:',
+            e
+          );
+        } finally {
+          setIsLoaded(true);
+        }
+      };
+
+
+    // ===================================================
+    // SAVE
+    // ===================================================
+
+    const saveCanvasChunks =
+      async (
+        chunksToSave: ChunkData[]
+      ) => {
+        try {
+          const jsonValue =
+            JSON.stringify(
+              chunksToSave
+            );
+
+          await AsyncStorage.setItem(
+            GET_CANVAS_KEY(taskId),
+            jsonValue
+          );
+        } catch (e) {
+          console.error(
+            'Error al guardar chunks:',
+            e
+          );
+        }
+      };
+
+
+    // ===================================================
+    // CREAR CHUNK NORMAL
+    // ===================================================
+
+    const handleAddChunk =
+      () => {
+
+        const index =
+          chunks.length;
+
+        const newChunk: ChunkData =
+          {
+            id:
+              Date.now().toString(),
+
+            title:
+              `Paso ${
+                index + 1
+              }: Subactividad`,
+
+            description:
+              'Escribe aquí los detalles del paso...',
+
+            status:
+              'no_iniciado',
+
+            position: {
+              x:
+                WORLD_CENTER -
+                140 +
+                (index % 3) *
+                  340,
+
+              y:
+                WORLD_CENTER -
+                120 +
+                Math.floor(
+                  index / 3
+                ) *
+                  300,
+            },
+
+            connections: {},
+          };
+
+        setChunks(
+          prev => [
+            ...prev,
+            newChunk,
+          ]
         );
 
-      if (jsonValue !== null) {
-
-        const savedChunks =
-          JSON.parse(jsonValue);
-
-        setChunks(savedChunks);
-
-      } else {
-
-        setChunks([]);
-
-      }
-
-    } catch (e) {
-
-      console.error(
-        'Error al cargar chunks:',
-        e
-      );
-
-    } finally {
-
-      setIsLoaded(true);
-
-    }
-  };
+        setSelectedChunkId(
+          newChunk.id
+        );
+      };
 
 
-  // -------------------------------------------------------
-  // SAVE
-  // -------------------------------------------------------
+    // ===================================================
+    // CREAR SUBPASO
+    // ===================================================
 
-  const saveCanvasChunks = async (
-    chunksToSave: ChunkData[]
-  ) => {
+    const handleAddSubStep =
+      (
+        parentId: string
+      ) => {
 
-    try {
+        const parent =
+          chunks.find(
+            chunk =>
+              chunk.id ===
+              parentId
+          );
 
-      const jsonValue =
-        JSON.stringify(chunksToSave);
-
-      await AsyncStorage.setItem(
-        GET_CANVAS_KEY(taskId),
-        jsonValue
-      );
-
-    } catch (e) {
-
-      console.error(
-        'Error al guardar chunks:',
-        e
-      );
-
-    }
-  };
-
-
-  // -------------------------------------------------------
-  // CALCULAR DISTANCIA ENTRE DOS DEDOS
-  // -------------------------------------------------------
-
-  const getDistance = (
-    touches: readonly any[]
-  ) => {
-
-    if (touches.length < 2) {
-      return null;
-    }
-
-    const x1 = touches[0].pageX;
-    const y1 = touches[0].pageY;
-
-    const x2 = touches[1].pageX;
-    const y2 = touches[1].pageY;
-
-    const dx = x2 - x1;
-    const dy = y2 - y1;
-
-    return Math.sqrt(
-      dx * dx + dy * dy
-    );
-  };
-
-
-
-  
-  // -------------------------------------------------------
-  // AGREGAR CHUNK
-  // -------------------------------------------------------
-
-const WORLD_SIZE = 5000;
-const WORLD_CENTER = WORLD_SIZE / 2;
-
-const handleAddChunk = () => {
-  const index = chunks.length;
-
-  const newChunk: ChunkData = {
-    id: Date.now().toString(),
-
-    title: `Paso ${index + 1}: Subactividad`,
-
-    description: 'Escribe aquí los detalles del paso...',
-
-    status: 'no_iniciado',
-
-    position: {
-      x: WORLD_CENTER - 140 + (index % 3) * 340,
-      y:
-        WORLD_CENTER -
-        120 +
-        Math.floor(index / 3) * 300,
-    },
-
-    connections: {},
-  };
-
-  setChunks(prev => [...prev, newChunk]);
-};
-
-
-
-const handleChangeChunkTitle = (
-  id: string,
-  title: string
-) => {
-  setChunks(prev =>
-    prev.map(chunk =>
-      chunk.id === id
-        ? {
-            ...chunk,
-            title,
-          }
-        : chunk
-    )
-  );
-};
-
-
-const handleChangeChunkDescription = (
-  id: string,
-  description: string
-) => {
-  setChunks(prev =>
-    prev.map(chunk =>
-      chunk.id === id
-        ? {
-            ...chunk,
-            description,
-          }
-        : chunk
-    )
-  );
-};
-
-const handleChangeChunkStatus = (
-  id: string,
-  status: ChunkStatus
-) => {
-  setChunks(prev =>
-    prev.map(chunk =>
-      chunk.id === id
-        ? {
-            ...chunk,
-            status,
-          }
-        : chunk
-    )
-  );
-};
-
-  // -------------------------------------------------------
-  // ELIMINAR CHUNK
-  // -------------------------------------------------------
-
-const handleRemoveChunk = (
-  id: string
-) => {
-  setChunks(prev =>
-    prev.filter(
-      chunk => chunk.id !== id
-    )
-  );
-
-  // Si eliminamos el chunk seleccionado,
-  // quitamos también la selección.
-  if (selectedChunkId === id) {
-    setSelectedChunkId(null);
-  }
-};
-
-
-  // -------------------------------------------------------
-  // CONEXIONES
-  // -------------------------------------------------------
-
-  const handleToggleConnection = (
-    id: string,
-    side: ConnectionSide
-  ) => {
-
-    setChunks(prev =>
-
-      prev.map(chunk => {
-
-        if (chunk.id !== id) {
-          return chunk;
+        if (!parent) {
+          return;
         }
 
-        return {
-
-          ...chunk,
-
-          connections: {
-
-            ...chunk.connections,
-
-            [side]:
-              !chunk.connections[side],
-
-          },
-
-        };
-
-      })
-
-    );
-
-  };
-
-
-  // -------------------------------------------------------
-  // RENDER
-  // -------------------------------------------------------
-
-  return (
-  <TexturedScreen
-    style={styles.container}
-  >
-
-    {/* HEADER */}
-    <View style={styles.header}>
-      <Text style={styles.taskTitleText}>
-        {taskTitle}
-      </Text>
-    </View>
-
-    {/* VIEWPORT */}
-    <View style={styles.viewport}>
-
-      {/* CAPA DE GESTOS */}
-<CanvasGestureLayer
-  pan={pan}
-  zoom={zoom}
-  minZoom={MIN_ZOOM}
-  maxZoom={MAX_ZOOM}
-  worldLeft={-2500}
-  worldTop={-2500}
-  onCanvasPress={handleDeselectChunk}
-/>
-
-      {/* WORLD */}
-      <Animated.View
-        pointerEvents="box-none"
-        style={[
-          styles.world,
+        const newChunk: ChunkData =
           {
-transform: [
-  {
-    scale: zoom,
-  },
-  {
-    translateX: pan.x,
-  },
-  {
-    translateY: pan.y,
-  },
-],
-          },
-        ]}
-      >
+            id:
+              Date.now().toString(),
 
-        {chunks.length === 0 ? (
+            title:
+              `Paso ${
+                chunks.length + 1
+              }: Subactividad`,
+
+            description:
+              'Escribe aquí los detalles del subpaso...',
+
+            status:
+              'no_iniciado',
+
+            parentId:
+
+              parentId,
+
+            position: {
+              x:
+                parent.position.x +
+                340,
+
+              y:
+                parent.position.y,
+            },
+
+            connections: {},
+          };
+
+        setChunks(
+          prev => [
+            ...prev,
+            newChunk,
+          ]
+        );
+
+        setSelectedChunkId(
+          newChunk.id
+        );
+      };
+
+
+    // ===================================================
+    // CAMBIAR TÍTULO
+    // ===================================================
+
+    const handleChangeChunkTitle =
+      (
+        id: string,
+        newTitle: string
+      ) => {
+
+        setChunks(
+          prev =>
+            prev.map(
+              chunk =>
+                chunk.id === id
+                  ? {
+                      ...chunk,
+                      title:
+                        newTitle,
+                    }
+                  : chunk
+            )
+        );
+      };
+
+
+    // ===================================================
+    // CAMBIAR DESCRIPCIÓN
+    // ===================================================
+
+    const handleChangeChunkDescription =
+      (
+        id: string,
+        newDescription: string
+      ) => {
+
+        setChunks(
+          prev =>
+            prev.map(
+              chunk =>
+                chunk.id === id
+                  ? {
+                      ...chunk,
+                      description:
+                        newDescription,
+                    }
+                  : chunk
+            )
+        );
+      };
+
+
+    // ===================================================
+    // CAMBIAR ESTADO
+    // ===================================================
+
+    const handleChangeChunkStatus =
+      (
+        id: string,
+        newStatus: ChunkStatus
+      ) => {
+
+        setChunks(
+          prev =>
+            prev.map(
+              chunk =>
+                chunk.id === id
+                  ? {
+                      ...chunk,
+                      status:
+                        newStatus,
+                    }
+                  : chunk
+            )
+        );
+      };
+
+
+    // ===================================================
+    // MOVER CHUNK
+    // ===================================================
+    //
+    // startX/startY:
+    // posición del chunk cuando comenzó
+    // el gesto.
+    //
+    // dx/dy:
+    // desplazamiento del dedo desde
+    // el inicio del gesto.
+    //
+    // Esto evita acumular dx/dy varias
+    // veces durante el mismo gesto.
+    // ===================================================
+
+    const handleMoveChunk =
+      (
+        id: string,
+        startX: number,
+        startY: number,
+        dx: number,
+        dy: number
+      ) => {
+
+        const currentZoom =
+          (zoom as any)
+            .__getValue();
+
+        const worldDx =
+          dx / currentZoom;
+
+        const worldDy =
+          dy / currentZoom;
+
+        setChunks(
+          prev =>
+            prev.map(
+              chunk =>
+                chunk.id === id
+                  ? {
+                      ...chunk,
+
+                      position: {
+                        x:
+                          startX +
+                          worldDx,
+
+                        y:
+                          startY +
+                          worldDy,
+                      },
+                    }
+                  : chunk
+            )
+        );
+      };
+
+
+    // ===================================================
+    // ELIMINAR CHUNK
+    // ===================================================
+
+    const handleRemoveChunk =
+      (
+        id: string
+      ) => {
+
+        setChunks(
+          prev =>
+            prev.filter(
+              chunk =>
+                chunk.id !== id
+            )
+        );
+
+        if (
+          selectedChunkId === id
+        ) {
+          setSelectedChunkId(
+            null
+          );
+        }
+      };
+
+
+    // ===================================================
+    // SELECCIONAR
+    // ===================================================
+
+    const handleSelectChunk =
+      (
+        id: string
+      ) => {
+        setSelectedChunkId(id);
+      };
+
+
+    // ===================================================
+    // DESELECCIONAR
+    // ===================================================
+
+    const handleDeselectChunk =
+      () => {
+        setSelectedChunkId(
+          null
+        );
+      };
+
+
+    // ===================================================
+    // CONEXIONES
+    // ===================================================
+
+    const handleToggleConnection =
+      (
+        id: string,
+        side: ConnectionSide
+      ) => {
+
+        setChunks(
+          prev =>
+            prev.map(
+              chunk => {
+
+                if (
+                  chunk.id !== id
+                ) {
+                  return chunk;
+                }
+
+                return {
+                  ...chunk,
+
+                  connections: {
+                    ...chunk.connections,
+
+                    [side]:
+                      !chunk
+                        .connections[
+                        side
+                      ],
+                  },
+                };
+              }
+            )
+        );
+      };
+
+
+    // ===================================================
+    // RENDER
+    // ===================================================
+
+    return (
+      <TexturedScreen>
+
+        {/* ============================================= */}
+        {/* HEADER */}
+        {/* ============================================= */}
+
+        <View
+          style={styles.container}
+        >
+
           <View
-            style={
-              styles.emptyCanvasContainer
-            }
+            style={styles.header}
           >
             <Text
               style={
-                styles.emptyCanvasText
+                styles.taskTitleText
               }
             >
-              Aún no hay pasos creados
-              en este lienzo
+              {title}
             </Text>
           </View>
-        ) : (
-          chunks.map(item => (
-            <View
-              key={item.id}
+
+
+          {/* =========================================== */}
+          {/* CANVAS */}
+          {/* =========================================== */}
+
+          <View
+            style={styles.viewport}
+          >
+
+            {/* ========================================= */}
+            {/* GESTOS DEL CANVAS */}
+            {/* ========================================= */}
+
+            <CanvasGestureLayer
+              pan={pan}
+              zoom={zoom}
+              minZoom={MIN_ZOOM}
+              maxZoom={MAX_ZOOM}
+              worldLeft={-2500}
+              worldTop={-2500}
+              onCanvasPress={
+                handleDeselectChunk
+              }
+            />
+
+
+            {/* ========================================= */}
+            {/* MUNDO */}
+            {/* ========================================= */}
+
+            <Animated.View
+              pointerEvents="box-none"
               style={[
-                styles.chunkItemWrapper,
+                styles.world,
+
                 {
-                  left:
-                    item.position.x,
-                  top:
-                    item.position.y,
+                  transform: [
+                    {
+                      scale: zoom,
+                    },
+
+                    {
+                      translateX:
+                        pan.x,
+                    },
+
+                    {
+                      translateY:
+                        pan.y,
+                    },
+                  ],
                 },
               ]}
             >
 
-              <ChunkNode
-                title={item.title}
-                description={
-                  item.description
-                }
-                status={item.status}
-                selected={
-  selectedChunkId === item.id
-}
+              {/* ======================================= */}
+              {/* SIN CHUNKS */}
+              {/* ======================================= */}
 
-onSelect={() =>
-  handleSelectChunk(item.id)
-}
-                connections={
-                  item.connections
-                }
+              {chunks.length ===
+              0 ? (
 
-                onTitleChange={
-                  newTitle =>
-                    handleChangeChunkTitle(
-                      item.id,
-                      newTitle
-                    )
-                }
+                <View
+                  style={
+                    styles.emptyCanvasContainer
+                  }
+                >
+                  <Text
+                    style={
+                      styles.emptyCanvasText
+                    }
+                  >
+                    Aún no hay pasos
+                    creados en este
+                    lienzo
+                  </Text>
+                </View>
 
-                onDescriptionChange={
-                  newDescription =>
-                    handleChangeChunkDescription(
-                      item.id,
-                      newDescription
-                    )
-                }
+              ) : (
 
-                onStatusChange={
-                  newStatus =>
-                    handleChangeChunkStatus(
-                      item.id,
-                      newStatus
-                    )
-                }
+                /* ===================================== */
+                /* CHUNKS */
+                /* ===================================== */
 
-                onClose={() =>
-                  handleRemoveChunk(
-                    item.id
+                chunks.map(
+                  item => (
+
+                    <View
+                      key={item.id}
+                      style={[
+                        styles.chunkItemWrapper,
+
+                        {
+                          left:
+                            item
+                              .position
+                              .x,
+
+                          top:
+                            item
+                              .position
+                              .y,
+                        },
+                      ]}
+                    >
+
+                      <ChunkNode
+
+                        title={
+                          item.title
+                        }
+
+                        description={
+                          item.description
+                        }
+
+                        position={
+                          item.position
+                        }
+
+                        status={
+                          item.status
+                        }
+
+                        selected={
+                          selectedChunkId ===
+                          item.id
+                        }
+
+                        onSelect={() =>
+                          handleSelectChunk(
+                            item.id
+                          )
+                        }
+
+                        onMove={(
+                          startX,
+                          startY,
+                          dx,
+                          dy
+                        ) =>
+                          handleMoveChunk(
+                            item.id,
+                            startX,
+                            startY,
+                            dx,
+                            dy
+                          )
+                        }
+
+                        connections={
+                          item.connections
+                        }
+
+                        onTitleChange={
+                          newTitle =>
+                            handleChangeChunkTitle(
+                              item.id,
+                              newTitle
+                            )
+                        }
+
+                        onDescriptionChange={
+                          newDescription =>
+                            handleChangeChunkDescription(
+                              item.id,
+                              newDescription
+                            )
+                        }
+
+                        onStatusChange={
+                          newStatus =>
+                            handleChangeChunkStatus(
+                              item.id,
+                              newStatus
+                            )
+                        }
+
+                        onClose={() =>
+                          handleRemoveChunk(
+                            item.id
+                          )
+                        }
+
+                        onPressSubStep={() =>
+                          handleAddSubStep(
+                            item.id
+                          )
+                        }
+
+                        onConnectPointPress={
+                          side =>
+                            handleToggleConnection(
+                              item.id,
+                              side
+                            )
+                        }
+                      />
+
+                    </View>
                   )
-                }
+                )
+              )}
 
-                onPressSubStep={() =>
-                  console.log(
-                    'Añadir subpaso a:',
-                    item.id
-                  )
-                }
+            </Animated.View>
 
-                onConnectPointPress={
-                  side =>
-                    handleToggleConnection(
-                      item.id,
-                      side
-                    )
-                }
-              />
-
-            </View>
-          ))
-        )}
-
-      </Animated.View>
-
-    </View>
-
-    {/* MENÚ */}
-    <View
-      style={styles.menuContainer}
-    >
-      <CanvasMenu
-        onAddChunk={
-          handleAddChunk
-        }
-      />
-    </View>
-
-  </TexturedScreen>
-
-  );
-};
+          </View>
 
 
-export default Infinity_canvas;
+          {/* =========================================== */}
+          {/* MENÚ */}
+          {/* =========================================== */}
+
+          <View
+            style={
+              styles.menuContainer
+            }
+          >
+            <CanvasMenu
+              onAddChunk={
+                handleAddChunk
+              }
+            />
+          </View>
+
+        </View>
+
+      </TexturedScreen>
+    );
+  };
 
 
-// =========================================================
-// STYLES
-// =========================================================
+// =======================================================
+// ESTILOS
+// =======================================================
 
-const styles = StyleSheet.create({
+const styles =
+  StyleSheet.create({
 
-  container: {
-    flex: 1,
-  },
+    container: {
+      flex: 1,
+    },
 
+    header: {
+      paddingTop: 16,
+      paddingHorizontal: 20,
+      alignItems: 'center',
+      zIndex: 10,
+    },
 
-  header: {
-    paddingTop: 16,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-    zIndex: 10,
-  },
+    taskTitleText: {
+      color: '#DED1EB',
+      fontSize: 20,
+      fontWeight: 'bold',
+    },
 
+    viewport: {
+      flex: 1,
+      overflow: 'hidden',
+    },
 
-  taskTitleText: {
-    color: '#DED1EB',
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
+    world: {
+      position: 'absolute',
+      width: WORLD_SIZE,
+      height: WORLD_SIZE,
+      left: -2500,
+      top: -2500,
+    },
 
+    chunkItemWrapper: {
+      position: 'absolute',
+    },
 
-  // Área visible del canvas
-  viewport: {
-    flex: 1,
-    overflow: 'hidden',
-  },
+    emptyCanvasContainer: {
+      position: 'absolute',
+      left: 2300,
+      top: 2300,
+      alignItems: 'center',
+    },
 
+    emptyCanvasText: {
+      color: '#3B3947',
+      fontSize: 16,
+      fontWeight: '500',
+    },
 
-  // El mundo que se mueve y escala
-  world: {
-    position: 'absolute',
+    menuContainer: {
+      position: 'absolute',
+      bottom: 30,
+      left: 0,
+      right: 0,
+      alignItems: 'center',
+      zIndex: 100,
+    },
+  });
 
-    width: 5000,
-    height: 5000,
-
-    left: -2500,
-    top: -2500,
-  },
-
-
-  // Cada nodo tiene una posición absoluta
-  chunkItemWrapper: {
-    position: 'absolute',
-  },
-
-
-  emptyCanvasContainer: {
-    position: 'absolute',
-
-    left: 2300,
-    top: 2300,
-
-    alignItems: 'center',
-  },
-
-
-  emptyCanvasText: {
-    color: '#3B3947',
-    fontSize: 16,
-    fontWeight: '500',
-  },
-
-
-  menuContainer: {
-    position: 'absolute',
-
-    bottom: 30,
-    left: 0,
-    right: 0,
-
-    alignItems: 'center',
-
-    zIndex: 100,
-  },
-
-});
+export default InfinityCanvas;
