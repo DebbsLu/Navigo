@@ -1,18 +1,20 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, FlatList, Alert, TouchableOpacity, } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 
 // Importación de componentes reutilizables
 import TexturedScreen from '../components/TexturedScreen';
+import {ViewInfoProxima} from '../components/ViewInfoProxima';
 import BtnCircleBig from '../components/BtnCircleBig';
-import CustomModal from '../components/CustomModal';
+import ViewEncabezado from '../components/ViewEncabezado';
 import ViewLista from '../components/ViewLista';
+import ViewBtnsMenu from '../components/ViewBtnsMenu';
+import CustomModal from '../components/CustomModal';
 
 // Clave para guardar en AsyncStorage
 const STORAGE_KEY = '@tasks_list_key';
 
-// Interfaz para la estructura de la tarea
 export interface Task {
   id: string;
   title: string;
@@ -20,22 +22,23 @@ export interface Task {
 }
 
 const Task_home: React.FC = () => {
-  // Hook de navegación de React Navigation
   const navigation = useNavigation<any>();
 
-  // Estado para controlar la visibilidad del Modal
   const [isModalVisible, setIsModalVisible] = useState<boolean>(false);
-
-  // Estado para almacenar la lista de tareas
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
 
-  // 1. CARGAR TAREAS: Al montar el componente
+  const isInitialRender = useRef(true);
+
   useEffect(() => {
     loadTasks();
   }, []);
 
-  // 2. GUARDAR TAREAS: Cada vez que el estado `tasks` cambie
   useEffect(() => {
+    if (isInitialRender.current) {
+      isInitialRender.current = false;
+      return;
+    }
     saveTasks(tasks);
   }, [tasks]);
 
@@ -43,7 +46,8 @@ const Task_home: React.FC = () => {
     try {
       const jsonValue = await AsyncStorage.getItem(STORAGE_KEY);
       if (jsonValue != null) {
-        setTasks(JSON.parse(jsonValue));
+        const loadedTasks: Task[] = JSON.parse(jsonValue);
+        setTasks(sortTasksByDate(loadedTasks));
       }
     } catch (e) {
       console.error('Error al cargar las tareas:', e);
@@ -59,47 +63,138 @@ const Task_home: React.FC = () => {
     }
   };
 
-  // Funciones de control del modal
-  const handleOpenModal = () => setIsModalVisible(true);
-  const handleCloseModal = () => setIsModalVisible(false);
+  const parseTaskDate = (dateStr?: string): Date | null => {
+    if (!dateStr) return null;
+    const parts = dateStr.includes('/') ? dateStr.split('/') : dateStr.split('-');
+    if (parts.length === 3) {
+      if (parts[0].length === 4) {
+        return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+      } else {
+        return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+      }
+    }
+    const timestamp = Date.parse(dateStr);
+    return isNaN(timestamp) ? null : new Date(timestamp);
+  };
 
-  // Función CREATE: Agrega una nueva tarea y cierra el modal
-  const handleAddTask = (data: { actividad: string; fecha: string }) => {
+  const sortTasksByDate = (taskList: Task[]): Task[] => {
+    return [...taskList].sort((a, b) => {
+      const dateA = parseTaskDate(a.date);
+      const dateB = parseTaskDate(b.date);
+
+      if (!dateA && !dateB) return 0;
+      if (!dateA) return 1;
+      if (!dateB) return -1;
+
+      return dateA.getTime() - dateB.getTime();
+    });
+  };
+
+  const handleOpenCreateModal = () => {
+    setEditingTask(null);
+    setIsModalVisible(true);
+  };
+
+  const handleOpenEditModal = (task: Task) => {
+    setEditingTask(task);
+    setIsModalVisible(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalVisible(false);
+    setEditingTask(null);
+  };
+
+  const handleSaveTask = (data: { actividad: string; fecha: string }) => {
     if (!data.actividad.trim()) return;
 
-    const newTask: Task = {
-      id: Date.now().toString(),
-      title: data.actividad.trim(),
-      date: data.fecha ? data.fecha.trim() : undefined,
-    };
-
-    setTasks((prevTasks) => [newTask, ...prevTasks]);
+    if (editingTask) {
+      const updatedTasks = tasks.map((t) =>
+        t.id === editingTask.id
+          ? { ...t, title: data.actividad.trim(), date: data.fecha ? data.fecha.trim() : undefined }
+          : t
+      );
+      setTasks(sortTasksByDate(updatedTasks));
+    } else {
+      const newTask: Task = {
+        id: Date.now().toString(),
+        title: data.actividad.trim(),
+        date: data.fecha ? data.fecha.trim() : undefined,
+      };
+      setTasks(sortTasksByDate([newTask, ...tasks]));
+    }
     handleCloseModal();
   };
 
-  // Función NAVEGACIÓN: Redirige a la pantalla Infinity Canvas
+  const handleDeleteTask = () => {
+    if (!editingTask) return;
+
+    Alert.alert(
+      'Eliminar tarea',
+      '¿Estás seguro de que deseas eliminar esta tarea?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: () => {
+            const filteredTasks = tasks.filter((t) => t.id !== editingTask.id);
+            setTasks(filteredTasks);
+            handleCloseModal();
+          },
+        },
+      ]
+    );
+  };
+
   const handleNavigateToCanvas = (task: Task) => {
-    // Puedes pasar la tarea o su ID como parámetro a la pantalla de Canvas si lo necesitas
     navigation.navigate('InfinityCanvas', { taskId: task.id, title: task.title });
   };
 
+  const handleSelectTab = (index: number) => {
+    if (index === 0) {
+      // Home
+    } else if (index === 1) {
+      navigation.navigate('Reminders');
+    } else if (index === 2) {
+      navigation.navigate('Blocks');
+    }
+  };
+
+  const upcomingTask = tasks.find((t) => parseTaskDate(t.date) !== null) || tasks[0];
+
   return (
     <TexturedScreen style={styles.container}>
-      {/* Botón circular principal para abrir el modal */}
-      <View style={styles.buttonContainer}>
-        <BtnCircleBig
-          onPress={() => {
-            console.log('BOTÓN PRESIONADO');
-            setIsModalVisible(true);
-          }}
-        />
+      {/* Actividad más próxima */}
+      <View style={styles.topCardContainer}>
+        {upcomingTask ? (
+          <ViewInfoProxima
+            title={upcomingTask.title}
+            tagText={upcomingTask.date || 'Sin fecha'}
+            onPressBtn={() => handleNavigateToCanvas(upcomingTask)}
+          />
+        ) : (
+          <ViewInfoProxima
+            title="Sin tareas pendientes"
+            subtitle="¡Estás al día!"
+            tagText="---"
+          />
+        )}
       </View>
 
-      {/* Sección READ: Muestra la lista o el mensaje cuando está vacía */}
+      {/* Botón circular principal */}
+      <View style={styles.buttonContainer}>
+        <BtnCircleBig onPress={handleOpenCreateModal} />
+      </View>
+
+      {/* Encabezado */}
+      <ViewEncabezado title="Lista de tareas" />
+
+      {/* Lista de Tareas */}
       <View style={styles.listContainer}>
         {tasks.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No hay tareas</Text>
+            <Text style={styles.emptyText}>No hay tareas agregadas</Text>
           </View>
         ) : (
           <FlatList
@@ -108,8 +203,9 @@ const Task_home: React.FC = () => {
             renderItem={({ item, index }) => (
               <ViewLista
                 title1={item.title}
-                title2={item.date}
+                title2={item.date || ''}
                 isFirst={index === 0}
+                onPressItem={() => handleOpenEditModal(item)}
                 onPressButton={() => handleNavigateToCanvas(item)}
               />
             )}
@@ -119,12 +215,23 @@ const Task_home: React.FC = () => {
         )}
       </View>
 
-      {/* Modal para ingresar/crear nueva tarea */}
-      { <CustomModal
+      {/* Menú inferior */}
+      <View style={styles.menuContainer}>
+        <ViewBtnsMenu initialSelectIndex={0} onSelectTab={handleSelectTab} />
+      </View>
+
+      {/* Modal para Crear / Editar / Eliminar */}
+      <CustomModal
         visible={isModalVisible}
         onClose={handleCloseModal}
-        onSubmit={handleAddTask}
-      /> }
+        onSubmit={handleSaveTask}
+        onDelete={handleDeleteTask}
+        initialData={
+          editingTask
+            ? { actividad: editingTask.title, fecha: editingTask.date || '' }
+            : null
+        }
+      />
     </TexturedScreen>
   );
 };
@@ -134,30 +241,36 @@ export default Task_home;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 40,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+  },
+  topCardContainer: {
+    marginTop: 10,
+    marginBottom: 10,
   },
   buttonContainer: {
     alignItems: 'center',
-    marginVertical: 20,
+    marginVertical: 12,
   },
   listContainer: {
     flex: 1,
-    marginTop: 10,
+    marginTop: 4,
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingBottom: 100,
   },
   emptyText: {
     color: '#A192B4',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '500',
   },
   flatListContent: {
-    paddingBottom: 30,
-    gap: 12,
+    paddingBottom: 20,
+  },
+  menuContainer: {
+    paddingVertical: 10,
+    alignItems: 'center',
   },
 });
