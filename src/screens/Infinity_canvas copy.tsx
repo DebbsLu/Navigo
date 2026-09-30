@@ -5,6 +5,8 @@ import {
   StyleSheet,
   Text,
   Animated,
+  PanResponder,
+  GestureResponderEvent,
 } from 'react-native';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -13,7 +15,6 @@ import { useRoute, RouteProp } from '@react-navigation/native';
 
 import TexturedScreen from '../components/TexturedScreen';
 import CanvasMenu from '../components/CanvasMenu';
-import CanvasGestureLayer from '../components/CanvasGestureLayer';
 import ChunkNode, {
   ChunkStatus,
   ConnectionSide,
@@ -125,7 +126,22 @@ const Infinity_canvas: React.FC = () => {
 
   const zoomValue = useRef(INITIAL_ZOOM);
 
-  
+  const lastZoom = useRef(INITIAL_ZOOM);
+
+
+  // -------------------------------------------------------
+  // INFORMACIÓN DEL GESTO
+  // -------------------------------------------------------
+
+  const initialDistance = useRef<number | null>(null);
+
+  const initialZoom = useRef(INITIAL_ZOOM);
+
+  const lastPan = useRef({
+    x: 0,
+    y: 0,
+  });
+
 
   // -------------------------------------------------------
   // CARGAR CHUNKS
@@ -246,8 +262,143 @@ const Infinity_canvas: React.FC = () => {
   };
 
 
+  // -------------------------------------------------------
+  // PAN + PINCH
+  // -------------------------------------------------------
 
-  
+  const panResponder = useRef(
+
+    PanResponder.create({
+
+      onStartShouldSetPanResponder: () => true,
+
+      onMoveShouldSetPanResponder: () => true,
+
+      onPanResponderGrant: () => {
+
+        lastPan.current = {
+          x: (pan.x as any).__getValue(),
+          y: (pan.y as any).__getValue(),
+        };
+
+        initialZoom.current =
+          zoomValue.current;
+
+        lastZoom.current =
+          zoomValue.current;
+
+      },
+
+
+      onPanResponderMove: (
+        event: GestureResponderEvent,
+        gestureState
+      ) => {
+
+        const touches =
+          event.nativeEvent.touches;
+
+
+        // -----------------------------------------------
+        // PINCH
+        // -----------------------------------------------
+
+        if (touches.length >= 2) {
+
+          const distance =
+            getDistance(touches);
+
+          if (distance === null) {
+            return;
+          }
+
+          if (
+            initialDistance.current === null
+          ) {
+
+            initialDistance.current =
+              distance;
+
+            initialZoom.current =
+              zoomValue.current;
+
+            return;
+          }
+
+
+          const scaleFactor =
+            distance /
+            initialDistance.current;
+
+
+          let newZoom =
+            initialZoom.current *
+            scaleFactor;
+
+
+          newZoom = Math.max(
+            MIN_ZOOM,
+            Math.min(
+              MAX_ZOOM,
+              newZoom
+            )
+          );
+
+
+          zoomValue.current =
+            newZoom;
+
+
+          zoom.setValue(newZoom);
+
+          return;
+        }
+
+
+        // -----------------------------------------------
+        // PAN
+        // -----------------------------------------------
+
+        const newX =
+          lastPan.current.x +
+          gestureState.dx;
+
+        const newY =
+          lastPan.current.y +
+          gestureState.dy;
+
+
+        pan.setValue({
+          x: newX,
+          y: newY,
+        });
+
+      },
+
+
+      onPanResponderRelease: () => {
+
+        initialDistance.current =
+          null;
+
+        lastZoom.current =
+          zoomValue.current;
+
+      },
+
+
+      onPanResponderTerminate: () => {
+
+        initialDistance.current =
+          null;
+
+      },
+
+    })
+
+  ).current;
+
+
   // -------------------------------------------------------
   // AGREGAR CHUNK
   // -------------------------------------------------------
@@ -392,152 +543,166 @@ const handleChangeChunkStatus = (
   // -------------------------------------------------------
 
   return (
-  <TexturedScreen
-    style={styles.container}
-  >
 
-    {/* HEADER */}
-    <View style={styles.header}>
-      <Text style={styles.taskTitleText}>
-        {taskTitle}
-      </Text>
-    </View>
+    <TexturedScreen
+      style={styles.container}
+    >
 
-    {/* VIEWPORT */}
-    <View style={styles.viewport}>
+      {/* HEADER */}
 
-      {/* CAPA DE GESTOS */}
-      <CanvasGestureLayer
-        pan={pan}
-      />
+      <View style={styles.header}>
 
-      {/* WORLD */}
-      <Animated.View
-        pointerEvents="box-none"
-        style={[
-          styles.world,
-          {
-            transform: [
-              {
-                translateX: pan.x,
-              },
-              {
-                translateY: pan.y,
-              },
-              {
-                scale: zoom,
-              },
-            ],
-          },
-        ]}
+        <Text
+          style={styles.taskTitleText}
+        >
+          {taskTitle}
+        </Text>
+
+      </View>
+
+
+      {/* VIEWPORT */}
+
+      <View
+        style={styles.viewport}
+        {...panResponder.panHandlers}
       >
 
-        {chunks.length === 0 ? (
-          <View
-            style={
-              styles.emptyCanvasContainer
-            }
-          >
-            <Text
-              style={
-                styles.emptyCanvasText
-              }
-            >
-              Aún no hay pasos creados
-              en este lienzo
-            </Text>
-          </View>
-        ) : (
-          chunks.map(item => (
-            <View
-              key={item.id}
-              style={[
-                styles.chunkItemWrapper,
+        {/* WORLD */}
+
+        <Animated.View
+          style={[
+            styles.world,
+
+            {
+              transform: [
+
                 {
-                  left:
-                    item.position.x,
-                  top:
-                    item.position.y,
+                  translateX:
+                    pan.x,
                 },
-              ]}
+
+                {
+                  translateY:
+                    pan.y,
+                },
+
+                {
+                  scale:
+                    zoom,
+                },
+
+              ],
+            },
+          ]}
+        >
+
+          {chunks.length === 0 ? (
+
+            <View
+              style={styles.emptyCanvasContainer}
             >
 
-              <ChunkNode
-                title={item.title}
-                description={
-                  item.description
-                }
-                status={item.status}
-                connections={
-                  item.connections
-                }
-
-                onTitleChange={
-                  newTitle =>
-                    handleChangeChunkTitle(
-                      item.id,
-                      newTitle
-                    )
-                }
-
-                onDescriptionChange={
-                  newDescription =>
-                    handleChangeChunkDescription(
-                      item.id,
-                      newDescription
-                    )
-                }
-
-                onStatusChange={
-                  newStatus =>
-                    handleChangeChunkStatus(
-                      item.id,
-                      newStatus
-                    )
-                }
-
-                onClose={() =>
-                  handleRemoveChunk(
-                    item.id
-                  )
-                }
-
-                onPressSubStep={() =>
-                  console.log(
-                    'Añadir subpaso a:',
-                    item.id
-                  )
-                }
-
-                onConnectPointPress={
-                  side =>
-                    handleToggleConnection(
-                      item.id,
-                      side
-                    )
-                }
-              />
+              <Text
+                style={styles.emptyCanvasText}
+              >
+                Aún no hay pasos creados
+                en este lienzo
+              </Text>
 
             </View>
-          ))
-        )}
 
-      </Animated.View>
+          ) : (
 
-    </View>
+            chunks.map(item => (
 
-    {/* MENÚ */}
-    <View
-      style={styles.menuContainer}
-    >
-      <CanvasMenu
-        onAddChunk={
-          handleAddChunk
-        }
-      />
-    </View>
+              <View
+                key={item.id}
+                style={[
+                  styles.chunkItemWrapper,
 
-  </TexturedScreen>
+                  {
+                    left:
+                      item.position.x,
+
+                    top:
+                      item.position.y,
+                  },
+                ]}
+              >
+
+<ChunkNode
+  title={item.title}
+  description={item.description}
+  status={item.status}
+  connections={item.connections}
+
+  onTitleChange={newTitle =>
+    handleChangeChunkTitle(
+      item.id,
+      newTitle
+    )
+  }
+
+  onDescriptionChange={newDescription =>
+    handleChangeChunkDescription(
+      item.id,
+      newDescription
+    )
+  }
+
+  onStatusChange={newStatus =>
+    handleChangeChunkStatus(
+      item.id,
+      newStatus
+    )
+  }
+
+  onClose={() =>
+    handleRemoveChunk(item.id)
+  }
+
+  onPressSubStep={() =>
+    console.log(
+      'Añadir subpaso a:',
+      item.id
+    )
+  }
+
+  onConnectPointPress={side =>
+    handleToggleConnection(
+      item.id,
+      side
+    )
+  }
+/>
+
+              </View>
+
+            ))
+
+          )}
+
+        </Animated.View>
+
+      </View>
+
+
+      {/* MENÚ */}
+
+      <View
+        style={styles.menuContainer}
+      >
+
+        <CanvasMenu
+          onAddChunk={
+            handleAddChunk
+          }
+        />
+
+      </View>
+
+    </TexturedScreen>
 
   );
 };
