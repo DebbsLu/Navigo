@@ -1,19 +1,25 @@
 import React from 'react';
+
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   TextInput,
-
 } from 'react-native';
-import BtnClose from './BtnClose'; // Tu componente existente de cerrar
 
-// Tipos de estado posibles para el chunk
-export type ChunkStatus = 'avanzando' | 'completado' | 'no_iniciado';
+import BtnClose from './BtnClose';
 
-// Posición de los puntos de conexión
-export type ConnectionSide = 'top' | 'bottom' | 'left' | 'right';
+export type ChunkStatus =
+  | 'avanzando'
+  | 'completado'
+  | 'no_iniciado';
+
+export type ConnectionSide =
+  | 'top'
+  | 'bottom'
+  | 'left'
+  | 'right';
 
 interface ConnectionPointState {
   top?: boolean;
@@ -25,34 +31,55 @@ interface ConnectionPointState {
 interface ChunkNodeProps {
   title: string;
   description: string;
+
   status?: ChunkStatus;
 
+  selected?: boolean;
+
+  onSelect?: () => void;
+
   onTitleChange?: (title: string) => void;
-  onDescriptionChange?: (description: string) => void;
-  onStatusChange?: (status: ChunkStatus) => void;
+
+  onDescriptionChange?: (
+    description: string
+  ) => void;
+
+  onStatusChange?: (
+    status: ChunkStatus
+  ) => void;
 
   subStepButtonText?: string;
+
   connections?: ConnectionPointState;
+
   onClose?: () => void;
+
   onPressSubStep?: () => void;
+
   onConnectPointPress?: (
     side: ConnectionSide
   ) => void;
 }
 
-// Configuración de colores según el estado
+const DOT_SIZE = 14;
+
 const STATUS_CONFIG: Record<
   ChunkStatus,
-  { label: string; color: string }
+  {
+    label: string;
+    color: string;
+  }
 > = {
   avanzando: {
     label: 'Avanzando',
     color: '#853ACF',
   },
+
   completado: {
     label: 'Completado',
     color: '#C694EB',
   },
+
   no_iniciado: {
     label: 'No iniciado',
     color: '#DED1EB',
@@ -77,39 +104,63 @@ const getNextStatus = (
   }
 };
 
-
-
 const ChunkNode: React.FC<ChunkNodeProps> = ({
   title,
   description,
-  status = 'avanzando',
+
+  status = 'no_iniciado',
+
+  selected = false,
+
+  onSelect,
+
   onTitleChange,
+
   onDescriptionChange,
+
   onStatusChange,
+
   subStepButtonText = '+ Añadir subpaso',
+
   connections = {},
+
   onClose,
+
   onPressSubStep,
+
   onConnectPointPress,
 }) => {
-  const currentStatus = STATUS_CONFIG[status];
-
-  // Helper para obtener el color del punto de conexión (100% o 10% opacidad)
-  const getConnectionPointStyle = (isConnected?: boolean) => ({
-    backgroundColor: isConnected ? '#9793C7' : 'rgba(151, 147, 199, 0.10)',
-  });
+  const currentStatus =
+    STATUS_CONFIG[status];
 
   return (
-    <View style={styles.wrapper}>
-      {/* Texto de Estado externo en la parte superior */}
-      <Text style={[styles.statusText, { color: currentStatus.color }]}>
+    <View
+      style={styles.wrapper}
+      onTouchStart={onSelect}
+    >
+      {/* ESTADO */}
+      <Text
+        style={[
+          styles.statusText,
+          {
+            color: currentStatus.color,
+          },
+        ]}
+      >
         {currentStatus.label}
       </Text>
 
-      {/* Contenedor principal del Chunk */}
-      <View style={styles.cardContainer}>
-        {/* Encabezado: Estado (Círculo) + Botón Cerrar */}
+      {/* TARJETA */}
+      <View
+        style={[
+          styles.cardContainer,
+          selected &&
+            styles.cardContainerSelected,
+        ]}
+      >
+        {/* HEADER */}
         <View style={styles.header}>
+          {/* BOTÓN DE ESTADO */}
           <TouchableOpacity
             activeOpacity={0.7}
             onPress={() =>
@@ -128,85 +179,127 @@ const ChunkNode: React.FC<ChunkNodeProps> = ({
               ]}
             />
           </TouchableOpacity>
-          <BtnClose onPress={() => onClose?.()} />
-        </View> 
 
-        {/* Título del paso */}
-        <TextInput
-        value={title}
-        onChangeText={onTitleChange}
-        style={styles.titleInput}
-        placeholder="Nombre del paso..."
-        placeholderTextColor="#5E596B"
-        multiline
-      />
+          {/* CERRAR */}
+          <BtnClose
+            onPress={() => onClose?.()}
+          />
+        </View>
 
-        {/* Caja contenedora de la descripción */}
-      <View style={styles.descriptionBox}>
+        {/* TÍTULO */}
         <TextInput
-          value={description}
-          onChangeText={onDescriptionChange}
-          style={styles.descriptionInput}
-          placeholder="Escribe aquí los detalles del paso..."
-          placeholderTextColor="#5E596B"
+          value={title}
+          onChangeText={onTitleChange}
+          placeholder="Título del paso"
+          placeholderTextColor="#777380"
+          style={styles.titleInput}
           multiline
-          textAlignVertical="top"
         />
-      </View>
 
-        {/* Botón inferior para Subpaso */}
+        {/* DESCRIPCIÓN */}
+        <View style={styles.descriptionBox}>
+          <TextInput
+            value={description}
+            onChangeText={
+              onDescriptionChange
+            }
+            placeholder="Escribe aquí los detalles..."
+            placeholderTextColor="#777380"
+            style={styles.descriptionInput}
+            multiline
+            textAlignVertical="top"
+          />
+        </View>
+
+        {/* AÑADIR SUBPASO */}
         <TouchableOpacity
           activeOpacity={0.7}
           style={styles.subStepButton}
-          onPress={onPressSubStep}
+          onPress={() =>
+            onPressSubStep?.()
+          }
         >
-          <Text style={styles.subStepButtonText}>{subStepButtonText}</Text>
+          <Text
+            style={
+              styles.subStepButtonText
+            }
+          >
+            {subStepButtonText}
+          </Text>
         </TouchableOpacity>
 
-        {/* ---- 4 Botones / Puntos de conexión en los costados ---- */}
-
-        {/* Punto Superior */}
+        {/* PUNTO SUPERIOR */}
         <TouchableOpacity
           activeOpacity={0.8}
+          onPress={() =>
+            onConnectPointPress?.('top')
+          }
           style={[
             styles.connectionDot,
             styles.dotTop,
-            getConnectionPointStyle(connections.top),
+            {
+              backgroundColor:
+                connections.top
+                  ? '#9793C7'
+                  : 'rgba(151, 147, 199, 0.10)',
+            },
           ]}
-          onPress={() => onConnectPointPress?.('top')}
         />
 
-        {/* Punto Inferior */}
+        {/* PUNTO INFERIOR */}
         <TouchableOpacity
           activeOpacity={0.8}
+          onPress={() =>
+            onConnectPointPress?.(
+              'bottom'
+            )
+          }
           style={[
             styles.connectionDot,
             styles.dotBottom,
-            getConnectionPointStyle(connections.bottom),
+            {
+              backgroundColor:
+                connections.bottom
+                  ? '#9793C7'
+                  : 'rgba(151, 147, 199, 0.10)',
+            },
           ]}
-          onPress={() => onConnectPointPress?.('bottom')}
         />
 
-        {/* Punto Izquierdo */}
+        {/* PUNTO IZQUIERDO */}
         <TouchableOpacity
           activeOpacity={0.8}
+          onPress={() =>
+            onConnectPointPress?.('left')
+          }
           style={[
             styles.connectionDot,
             styles.dotLeft,
-            getConnectionPointStyle(connections.left),
+            {
+              backgroundColor:
+                connections.left
+                  ? '#9793C7'
+                  : 'rgba(151, 147, 199, 0.10)',
+            },
           ]}
-          onPress={() => onConnectPointPress?.('left')}
         />
 
-        {/* Punto Derecho */}
+        {/* PUNTO DERECHO */}
         <TouchableOpacity
           activeOpacity={0.8}
+          onPress={() =>
+            onConnectPointPress?.('right')
+          }
           style={[
             styles.connectionDot,
             styles.dotRight,
-            getConnectionPointStyle(connections.right),
+            {
+              backgroundColor:
+                connections.right
+                  ? '#9793C7'
+                  : 'rgba(151, 147, 199, 0.10)',
+            },
           ]}
-          onPress={() => onConnectPointPress?.('right')}
         />
       </View>
     </View>
@@ -215,34 +308,20 @@ const ChunkNode: React.FC<ChunkNodeProps> = ({
 
 export default ChunkNode;
 
-const DOT_SIZE = 16; // Tamaño de los círculos de conexión
-
 const styles = StyleSheet.create({
   wrapper: {
     alignItems: 'flex-start',
-    paddingTop: 24, // Espacio para el texto superior y el botón top
-    paddingHorizontal: 12, // Espacio para los botones laterales
+    paddingTop: 24,
+    paddingHorizontal: 12,
   },
-  titleInput: {
-  color: '#FFFFFF',
-  fontSize: 18,
-  fontWeight: 'bold',
-  marginBottom: 14,
-  paddingRight: 10,
-},
 
-descriptionInput: {
-  color: '#FFFFFF',
-  fontSize: 14,
-  lineHeight: 20,
-  minHeight: 80,
-},
   statusText: {
     fontSize: 14,
     fontWeight: '600',
     marginBottom: 6,
     marginLeft: 16,
   },
+
   cardContainer: {
     width: 280,
     backgroundColor: '#181622',
@@ -252,26 +331,34 @@ descriptionInput: {
     padding: 16,
     position: 'relative',
   },
+
+  cardContainerSelected: {
+    borderColor: '#853ACF',
+    borderWidth: 2,
+  },
+
   header: {
     flexDirection: 'row',
-    //justifyContent: 'flex-end',
     justifyContent: 'space-between',
     alignItems: 'center',
     gap: 10,
     marginBottom: 8,
   },
+
   statusDot: {
     width: 14,
     height: 14,
     borderRadius: 7,
   },
-  titleText: {
+
+  titleInput: {
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 14,
     paddingRight: 10,
   },
+
   descriptionBox: {
     backgroundColor: '#1F1D2C',
     borderRadius: 14,
@@ -279,11 +366,14 @@ descriptionInput: {
     paddingVertical: 12,
     marginBottom: 14,
   },
-  descriptionText: {
+
+  descriptionInput: {
     color: '#FFFFFF',
     fontSize: 14,
     lineHeight: 20,
+    minHeight: 80,
   },
+
   subStepButton: {
     backgroundColor: '#181622',
     borderRadius: 12,
@@ -291,13 +381,13 @@ descriptionInput: {
     alignItems: 'flex-start',
     paddingLeft: 4,
   },
+
   subStepButtonText: {
     color: '#3B3947',
     fontSize: 15,
     fontWeight: '600',
   },
 
-  /* Estilos para los 4 puntos de conexión */
   connectionDot: {
     width: DOT_SIZE,
     height: DOT_SIZE,
@@ -305,26 +395,46 @@ descriptionInput: {
     position: 'absolute',
     zIndex: 10,
   },
+
   dotTop: {
     top: -DOT_SIZE / 2,
     alignSelf: 'center',
     left: '50%',
-    transform: [{ translateX: -(DOT_SIZE / 2) }],
+    transform: [
+      {
+        translateX: -(DOT_SIZE / 2),
+      },
+    ],
   },
+
   dotBottom: {
     bottom: -DOT_SIZE / 2,
     alignSelf: 'center',
     left: '50%',
-    transform: [{ translateX: -(DOT_SIZE / 2) }],
+    transform: [
+      {
+        translateX: -(DOT_SIZE / 2),
+      },
+    ],
   },
+
   dotLeft: {
     left: -DOT_SIZE / 2,
     top: '50%',
-    transform: [{ translateY: -(DOT_SIZE / 2) }],
+    transform: [
+      {
+        translateY: -(DOT_SIZE / 2),
+      },
+    ],
   },
+
   dotRight: {
     right: -DOT_SIZE / 2,
     top: '50%',
-    transform: [{ translateY: -(DOT_SIZE / 2) }],
+    transform: [
+      {
+        translateY: -(DOT_SIZE / 2),
+      },
+    ],
   },
 });

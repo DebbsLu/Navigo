@@ -101,6 +101,9 @@ const Infinity_canvas: React.FC = () => {
 
   const [isLoaded, setIsLoaded] = useState(false);
 
+  // Chunk actualmente seleccionado
+  const [selectedChunkId, setSelectedChunkId] =
+  useState<string | null>(null);
 
   // -------------------------------------------------------
   // POSICIÓN DEL CANVAS
@@ -147,6 +150,18 @@ const Infinity_canvas: React.FC = () => {
     }
 
   }, [chunks, isLoaded]);
+
+  // -------------------------------------------------------
+  // SELECCIÓN DE CHUNKS
+  // -------------------------------------------------------
+
+  const handleSelectChunk = (id: string) => {
+    setSelectedChunkId(id);
+  };
+
+  const handleDeselectChunk = () => {
+    setSelectedChunkId(null);
+  };
 
 
   // -------------------------------------------------------
@@ -336,16 +351,21 @@ const handleChangeChunkStatus = (
   // ELIMINAR CHUNK
   // -------------------------------------------------------
 
-  const handleRemoveChunk = (
-    id: string
-  ) => {
+const handleRemoveChunk = (
+  id: string
+) => {
+  setChunks(prev =>
+    prev.filter(
+      chunk => chunk.id !== id
+    )
+  );
 
-    setChunks(prev =>
-      prev.filter(
-        chunk => chunk.id !== id
-      )
-    );
-  };
+  // Si eliminamos el chunk seleccionado,
+  // quitamos también la selección.
+  if (selectedChunkId === id) {
+    setSelectedChunkId(null);
+  }
+};
 
 
   // -------------------------------------------------------
@@ -414,6 +434,7 @@ const handleChangeChunkStatus = (
   maxZoom={MAX_ZOOM}
   worldLeft={-2500}
   worldTop={-2500}
+  onCanvasPress={handleDeselectChunk}
 />
 
       {/* WORLD */}
@@ -473,6 +494,13 @@ transform: [
                   item.description
                 }
                 status={item.status}
+                selected={
+  selectedChunkId === item.id
+}
+
+onSelect={() =>
+  handleSelectChunk(item.id)
+}
                 connections={
                   item.connections
                 }
