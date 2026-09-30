@@ -1,5 +1,9 @@
-import React, { useState } from 'react';
+// Pantalla "Bloqueos"
+// Muestra la lista de bloqueos guardados (AsyncStorage).
+import React, { useCallback, useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   Modal,
   Pressable,
   Platform,
@@ -20,6 +24,25 @@ import ViewBtnsMenu from '../components/ViewBtnsMenu';
 import BtnCircleBig from '../components/BtnCircleBig';
 import BtnCircleSmall from '../components/BtnCircleSmall';
 import BtnClose from '../components/BtnClose';
+import AppSelector from '../components/AppSelector';
+import WebsiteInputs from '../components/WebsiteInputs';
+
+import {
+  Block,
+  BlockedApp,
+  BlockFormData,
+  BlockTypeId,
+  Mission,
+  UsageUnit,
+} from '../types/blocks';
+import {
+  BLOCK_TYPE_SHORT,
+  MAX_NAME_LENGTH,
+  blockSummary,
+  buildBlock,
+  validateBlockForm,
+} from '../services/blockUtils';
+import { StorageError, addBlock, deleteBlock, loadBlocks, loadMissions } from '../services/blocksStorage';
 
 /* Paleta */
 const C = {
@@ -32,35 +55,21 @@ const C = {
   textSoft: 'rgba(255,255,255,0.65)',
 };
 
-/* Datos de ejemplo (solo visual) */
+/* Constantes de la interfaz */
 const DAYS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 
-const MOCK_BLOCKS = [
-  { id: '1', date: 'Jue May 30, 09:20 am', name: 'Nombre del bloqueo', type: 'Regular' },
-  { id: '2', date: 'Jue May 30, 09:20 am', name: 'Nombre del bloqueo', type: 'Uso' },
-  { id: '3', date: 'Jue May 30, 09:20 am', name: 'Nombre del bloqueo', type: 'Pasos' },
-];
-
-const MOCK_MISSIONS = [
-  { id: 'm1', title: 'llorar', date: '24/10/2026' },
-  { id: 'm2', title: 'I mena hello', date: '30/09/2026' },
-  { id: 'm3', title: 'Llorar ha...', date: '01/11/2026' },
-];
-
-const BLOCK_TYPES = [
+const BLOCK_TYPES: { id: BlockTypeId; label: string; desc: string }[] = [
   { id: 'regular', label: 'Bloqueo Regular', desc: 'Está bloqueado por x periodos de tiempo' },
   { id: 'uso', label: 'Bloqueo por uso', desc: 'Si lo usas más de x tiempo, se bloquea' },
   { id: 'pasos', label: 'Bloqueo por pasos', desc: 'Debes terminar este paso para desbloquear' },
 ];
 
+// Pasos de ejemplo (el bloqueo por pasos aún no tiene lógica)
 const MOCK_STEPS = [
   { id: 's1', title: 'Paso 1: Tomar agua' },
   { id: 's2', title: 'Paso 2: Estirarse 5 minutos' },
   { id: 's3', title: 'Paso 3: Escribir una nota' },
 ];
-
-const formatTime = (d: Date | null) =>
-  d ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined;
 
 const OPTIONS = [
   { key: 'descanso', label: 'Permitir tomar descanso', extra: '(X minutos)' },
@@ -68,6 +77,14 @@ const OPTIONS = [
   { key: 'segundoPlano', label: 'Bloquear aplicaciones en 2do plano' },
   { key: 'editarModelo', label: 'No permitir editar el modelo durante las horas de bloqueo' },
 ];
+
+/** Hora legible para mostrar en los campos del formulario. */
+const formatTime = (d: Date | null) =>
+  d ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined;
+
+/** Saca un mensaje legible de cualquier error. */
+const errorMessage = (e: unknown, fallback: string): string =>
+  e instanceof StorageError || e instanceof Error ? e.message : fallback;
 
 /* Sub-componentes */
 const Label: React.FC<{ children: string }> = ({ children }) => (
@@ -113,16 +130,27 @@ const SelectField: React.FC<{
 const Blocks: React.FC = () => {
   const insets = useSafeAreaInsets();
 
-  const [modalVisible, setModalVisible] = useState(false);
+   /* ── Lista de bloqueos ── */
+  const [blocks, setBlocks] = useState<Block[]>([]);
+  const [loadingBlocks, setLoadingBlocks] = useState(true);
+  const [listError, setListError] = useState<string | null>(null);
 
-  // Formulario (solo estado visual por ahora)
+  /* ── Modal y guardado ── */
+  const [modalVisible, setModalVisible] = useState(false);
+  const [saving, setSaving] = useState(false); // evita doble toque en "añadir bloqueo"
+
+  /* ── Misiones disponibles (vienen de Task_home) ── */
+  const [missions, setMissions] = useState<Mission[]>([]);
+
+  // Formulario 
   const [enabled, setEnabled] = useState(true);
   const [name, setName] = useState('');
   const [days, setDays] = useState<boolean[]>(Array(7).fill(false));
   const [missionId, setMissionId] = useState<string | null>(null);
-  const [typeId, setTypeId] = useState<string | null>(null);
-  const [web, setWeb] = useState('');
+  const [typeId, setTypeId] = useState<BlockTypeId | null>(null);
+  const [websites, setWebsites] = useState<string[]>(['']); // siempre al menos un campo
   const [opts, setOpts] = useState<Record<string, boolean>>({});
+  const [apps, setApps] = useState<BlockedApp[]>([]);
   const [openField, setOpenField] = useState<'mision' | 'tipo' | 'paso' | null>(null);
 
   // Campos según el tipo de bloqueo (solo visual)
@@ -137,15 +165,135 @@ const Blocks: React.FC = () => {
   const toggleOpt = (k: string) => setOpts((o) => ({ ...o, [k]: !o[k] }));
   const toggleField = (f: 'mision' | 'tipo' | 'paso') => setOpenField((cur) => (cur === f ? null : f));
 
-  const mission = MOCK_MISSIONS.find((m) => m.id === missionId);
+  const mission = missions.find((m) => m.id === missionId);
   const type = BLOCK_TYPES.find((t) => t.id === typeId);
   const step = MOCK_STEPS.find((x) => x.id === stepId);
 
-  const onPickTime = (_: any, date?: Date) => {
+  /** Se ejecuta cuando el usuario elige una hora en el reloj. */
+  const onPickTime = (_: unknown, date?: Date) => {
     if (Platform.OS === 'android') setPickerFor(null); // en Android el reloj se cierra solo
     if (!date) return;
     if (pickerFor === 'start') setStartTime(date);
     if (pickerFor === 'end') setEndTime(date);
+  };
+
+   /* ───────────── Carga de la lista ───────────── */
+
+  /** Lee los bloqueos guardados. Si falla, muestra el error con opción de reintentar. */
+  const refreshBlocks = useCallback(async () => {
+    setLoadingBlocks(true);
+    setListError(null);
+    try {
+      setBlocks(await loadBlocks());
+    } catch (e) {
+      console.error('[Blocks] Error al cargar bloqueos:', e);
+      setListError(errorMessage(e, 'No se pudieron cargar los bloqueos.'));
+    } finally {
+      setLoadingBlocks(false);
+    }
+  }, []);
+
+  // Al entrar a la pantalla por primera vez.
+  useEffect(() => {
+    refreshBlocks();
+  }, [refreshBlocks]);
+
+  /* ───────────── Formulario ───────────── */
+
+  /** Deja el formulario en blanco (se llama cada vez que se abre el modal). */
+  const resetForm = () => {
+    setEnabled(true);
+    setName('');
+    setDays(Array(7).fill(false));
+    setMissionId(null);
+    setTypeId(null);
+    setApps([]);
+    setWebsites(['']);
+    setOpts({});
+    setOpenField(null);
+    setStartTime(null);
+    setEndTime(null);
+    setPickerFor(null);
+    setUsageValue('');
+    setUsageUnit('min');
+    setStepId(null);
+  };
+
+  /** Abre el formulario: lo limpia y recarga las misiones de Task_home. */
+  const openModal = async () => {
+    resetForm();
+    try {
+      setMissions(await loadMissions());
+    } catch (e) {
+      console.error('[Blocks] Error al cargar misiones:', e);
+      setMissions([]);
+      Alert.alert('Misiones', errorMessage(e, 'No se pudieron cargar las misiones.'));
+    }
+    setModalVisible(true);
+  };
+
+  /** Junta el estado del formulario en un solo objeto para validarlo/guardarlo. */
+  const buildFormData = (): BlockFormData => ({
+    enabled,
+    name,
+    days,
+    missionId,
+    typeId,
+    startTime,
+    endTime,
+    usageValue,
+    usageUnit,
+    apps,
+    websites,
+    options: opts,
+  });
+
+  /** Botón "+ añadir bloqueo": valida, guarda y cierra el modal. */
+  const handleSubmit = async () => {
+    if (saving) return; // ya hay un guardado en curso
+
+    const form = buildFormData();
+
+    // Validar. Si hay errores, se muestran todos juntos y NO se guarda.
+    const errors = validateBlockForm(form, missions);
+    if (errors.length > 0) {
+      Alert.alert('Revisa el formulario', errors.map((e) => `• ${e}`).join('\n'));
+      return;
+    }
+
+    //  Construir y guardar.
+    setSaving(true);
+    try {
+      const block = buildBlock(form, missions);
+      const updated = await addBlock(block);
+      setBlocks(updated); // la lista ya muestra el bloqueo nuevo
+      setListError(null);
+      setModalVisible(false); // redirige a la lista de bloqueos
+    } catch (e) {
+      console.error('[Blocks] Error al guardar el bloqueo:', e);
+      Alert.alert('No se pudo guardar', errorMessage(e, 'Ocurrió un error inesperado. Inténtalo de nuevo.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /** Mantener presionada una tarjeta: pide confirmación y borra el bloqueo. */
+  const confirmDelete = (block: Block) => {
+    Alert.alert('Eliminar bloqueo', `¿Eliminar "${block.name}"?`, [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Eliminar',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            setBlocks(await deleteBlock(block.id));
+          } catch (e) {
+            console.error('[Blocks] Error al borrar:', e);
+            Alert.alert('No se pudo eliminar', errorMessage(e, 'Inténtalo de nuevo.'));
+          }
+        },
+      },
+    ]);
   };
 
   return (
@@ -159,17 +307,37 @@ const Blocks: React.FC = () => {
 
         {/* Lista de bloqueos */}
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 16 }}>
-          {MOCK_BLOCKS.map((b) => (
-            <View key={b.id} style={styles.card}>
-              <View style={styles.datePill}>
-                <Text style={styles.datePillText}>{b.date}</Text>
-              </View>
-              <Text style={styles.cardName} numberOfLines={1}>
-                {b.name} - <Text style={{ color: C.purpleLight, fontWeight: '700' }}>{b.type}</Text>
-              </Text>
-              <BtnCircleSmall size={40} />
+          {loadingBlocks && <ActivityIndicator color={C.purpleLight} style={{ marginTop: 24 }} />}
+
+          {!loadingBlocks && listError && (
+            <View style={styles.stateBox}>
+              <Text style={styles.stateText}>{listError}</Text>
+              <TouchableOpacity onPress={refreshBlocks} style={styles.retryBtn}>
+                <Text style={styles.retryText}>Reintentar</Text>
+              </TouchableOpacity>
             </View>
-          ))}
+          )}
+
+          {!loadingBlocks && !listError && blocks.length === 0 && (
+            <View style={styles.stateBox}>
+              <Text style={styles.stateText}>No hay bloqueos</Text>
+            </View>
+          )}
+
+          {!loadingBlocks &&
+            blocks.map((b) => (
+              <Pressable key={b.id} onLongPress={() => confirmDelete(b)} delayLongPress={500}>
+                <View style={[styles.card, !b.enabled && { opacity: 0.55 }]}>
+                  <View style={styles.datePill}>
+                    <Text style={styles.datePillText}>{blockSummary(b)}</Text>
+                  </View>
+                  <Text style={styles.cardName} numberOfLines={1}>
+                    {b.name} - <Text style={{ color: C.purpleLight, fontWeight: '700' }}>{BLOCK_TYPE_SHORT[b.type]}</Text>
+                  </Text>
+                  <BtnCircleSmall size={40} />
+                </View>
+              </Pressable>
+            ))}
         </ScrollView>
 
         <ViewBtnsMenu initialSelectIndex={2} />
@@ -206,7 +374,9 @@ const Blocks: React.FC = () => {
               <TextInput
                 value={name}
                 onChangeText={setName}
+                maxLength={MAX_NAME_LENGTH}
                 style={styles.field}
+                placeholder="Ej. Bloqueo de apps de mensajería"
                 placeholderTextColor="rgba(255,255,255,0.35)"
                 selectionColor={C.purpleLight}
               />
@@ -237,7 +407,12 @@ const Blocks: React.FC = () => {
                 open={openField === 'mision'}
                 onToggle={() => toggleField('mision')}
               >
-                {MOCK_MISSIONS.map((m) => (
+                {missions.length === 0 && (
+                  <Text style={styles.emptyDropdown}>
+                    Aún no tienes misiones. Créalas en la pantalla de tareas.
+                  </Text>
+                )}
+                {missions.map((m) => (
                   <TouchableOpacity
                     key={m.id}
                     activeOpacity={0.8}
@@ -248,7 +423,7 @@ const Blocks: React.FC = () => {
                     }}
                   >
                     <Text style={styles.missionTitle} numberOfLines={1}>{m.title}</Text>
-                    <Text style={styles.missionDate}>{m.date}</Text>
+                    {m.date ? <Text style={styles.missionDate}>{m.date}</Text> : null}
                   </TouchableOpacity>
                 ))}
               </SelectField>
@@ -268,6 +443,7 @@ const Blocks: React.FC = () => {
                     onPress={() => {
                       setTypeId(t.id);
                       setOpenField(null);
+                      setPickerFor(null); // cierra el reloj si estaba abierto
                     }}
                   >
                     <Text style={styles.typeText}>
@@ -278,10 +454,7 @@ const Blocks: React.FC = () => {
               </SelectField>
 
               <Label>Selecciona las aplicaciones</Label>
-              <TouchableOpacity activeOpacity={0.8} style={styles.field}>
-                <Text style={[styles.fieldText, { color: 'rgba(255,255,255,0.35)' }]}>Toca para elegir apps</Text>
-                <Ionicons name="apps-outline" size={18} color={C.textSoft} />
-              </TouchableOpacity>
+              <AppSelector selected={apps} onChange={setApps} />
 
               {/* ── Sección que cambia según el tipo de bloqueo ── */}
               {typeId === 'regular' && (
@@ -317,6 +490,7 @@ const Blocks: React.FC = () => {
                       display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                       themeVariant="dark"
                       onValueChange={onPickTime}
+                      onDismiss={() => setPickerFor(null)} // cerrar sin elegir hora
                     />
                   )}
                 </>
@@ -330,6 +504,7 @@ const Blocks: React.FC = () => {
                       value={usageValue}
                       onChangeText={(t) => setUsageValue(t.replace(/[^0-9]/g, ''))}
                       keyboardType="number-pad"
+                      maxLength={4}
                       placeholder="0"
                       placeholderTextColor="rgba(255,255,255,0.35)"
                       selectionColor={C.purpleLight}
@@ -378,16 +553,7 @@ const Blocks: React.FC = () => {
               )}
 
               <Label>Escribe las páginas web</Label>
-              <TextInput
-                value={web}
-                onChangeText={setWeb}
-                style={styles.field}
-                autoCapitalize="none"
-                keyboardType="url"
-                placeholder="ejemplo.com"
-                placeholderTextColor="rgba(255,255,255,0.35)"
-                selectionColor={C.purpleLight}
-              />
+              <WebsiteInputs values={websites} onChange={setWebsites} />
 
               <View style={styles.optionsWrap}>
                 {OPTIONS.map((o) => (
@@ -401,8 +567,13 @@ const Blocks: React.FC = () => {
                 ))}
               </View>
 
-              <TouchableOpacity activeOpacity={0.85} style={styles.addBtn} onPress={() => setModalVisible(false)}>
-                <Text style={styles.addBtnText}>+ añadir bloqueo</Text>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                style={[styles.addBtn, saving && { opacity: 0.6 }]}
+                onPress={handleSubmit}
+                disabled={saving}
+              >
+                <Text style={styles.addBtnText}>{saving ? 'Guardando...' : '+ añadir bloqueo'}</Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
@@ -419,6 +590,19 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { flex: 1, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 12 },
   addWrap: { alignItems: 'center', marginVertical: 20 },
+
+  /* Estados de la lista */
+  stateBox: { alignItems: 'center', marginTop: 32, gap: 12 },
+  stateText: { color: '#A192B4', fontSize: 16, fontWeight: '500', textAlign: 'center' },
+  retryBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+    borderRadius: 10,
+    backgroundColor: 'rgba(133,58,207,0.25)',
+    borderWidth: 1,
+    borderColor: 'rgba(198,148,235,0.45)',
+  },
+  retryText: { color: C.text, fontSize: 13, fontWeight: '600' },
 
   /* Tarjeta de la lista */
   card: {
@@ -517,6 +701,7 @@ const styles = StyleSheet.create({
     padding: 8,
     gap: 8,
   },
+  emptyDropdown: { color: C.textSoft, fontSize: 12, padding: 8, textAlign: 'center' },
   missionCard: {
     flexDirection: 'row',
     alignItems: 'center',
