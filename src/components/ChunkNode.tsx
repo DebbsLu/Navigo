@@ -4,6 +4,8 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  TextInput,
+
 } from 'react-native';
 import BtnClose from './BtnClose'; // Tu componente existente de cerrar
 
@@ -24,11 +26,18 @@ interface ChunkNodeProps {
   title: string;
   description: string;
   status?: ChunkStatus;
+
+  onTitleChange?: (title: string) => void;
+  onDescriptionChange?: (description: string) => void;
+  onStatusChange?: (status: ChunkStatus) => void;
+
   subStepButtonText?: string;
-  connections?: ConnectionPointState; // Indica qué lados están conectados
+  connections?: ConnectionPointState;
   onClose?: () => void;
   onPressSubStep?: () => void;
-  onConnectPointPress?: (side: ConnectionSide) => void;
+  onConnectPointPress?: (
+    side: ConnectionSide
+  ) => void;
 }
 
 // Configuración de colores según el estado
@@ -50,10 +59,33 @@ const STATUS_CONFIG: Record<
   },
 };
 
+const getNextStatus = (
+  status: ChunkStatus
+): ChunkStatus => {
+  switch (status) {
+    case 'no_iniciado':
+      return 'avanzando';
+
+    case 'avanzando':
+      return 'completado';
+
+    case 'completado':
+      return 'no_iniciado';
+
+    default:
+      return 'no_iniciado';
+  }
+};
+
+
+
 const ChunkNode: React.FC<ChunkNodeProps> = ({
   title,
   description,
   status = 'avanzando',
+  onTitleChange,
+  onDescriptionChange,
+  onStatusChange,
   subStepButtonText = '+ Añadir subpaso',
   connections = {},
   onClose,
@@ -78,22 +110,49 @@ const ChunkNode: React.FC<ChunkNodeProps> = ({
       <View style={styles.cardContainer}>
         {/* Encabezado: Estado (Círculo) + Botón Cerrar */}
         <View style={styles.header}>
-          <View
-            style={[
-              styles.statusDot,
-              { backgroundColor: currentStatus.color },
-            ]}
-          />
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() =>
+              onStatusChange?.(
+                getNextStatus(status)
+              )
+            }
+          >
+            <View
+              style={[
+                styles.statusDot,
+                {
+                  backgroundColor:
+                    currentStatus.color,
+                },
+              ]}
+            />
+          </TouchableOpacity>
           <BtnClose onPress={() => onClose?.()} />
         </View> 
 
         {/* Título del paso */}
-        <Text style={styles.titleText}>{title}</Text>
+        <TextInput
+        value={title}
+        onChangeText={onTitleChange}
+        style={styles.titleInput}
+        placeholder="Nombre del paso..."
+        placeholderTextColor="#5E596B"
+        multiline
+      />
 
         {/* Caja contenedora de la descripción */}
-        <View style={styles.descriptionBox}>
-          <Text style={styles.descriptionText}>{description}</Text>
-        </View>
+      <View style={styles.descriptionBox}>
+        <TextInput
+          value={description}
+          onChangeText={onDescriptionChange}
+          style={styles.descriptionInput}
+          placeholder="Escribe aquí los detalles del paso..."
+          placeholderTextColor="#5E596B"
+          multiline
+          textAlignVertical="top"
+        />
+      </View>
 
         {/* Botón inferior para Subpaso */}
         <TouchableOpacity
@@ -164,6 +223,20 @@ const styles = StyleSheet.create({
     paddingTop: 24, // Espacio para el texto superior y el botón top
     paddingHorizontal: 12, // Espacio para los botones laterales
   },
+  titleInput: {
+  color: '#FFFFFF',
+  fontSize: 18,
+  fontWeight: 'bold',
+  marginBottom: 14,
+  paddingRight: 10,
+},
+
+descriptionInput: {
+  color: '#FFFFFF',
+  fontSize: 14,
+  lineHeight: 20,
+  minHeight: 80,
+},
   statusText: {
     fontSize: 14,
     fontWeight: '600',
