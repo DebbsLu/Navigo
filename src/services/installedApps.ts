@@ -1,18 +1,5 @@
 // services/installedApps.ts
-// -----------------------------------------------------------------------------
 // Obtiene las aplicaciones instaladas en el teléfono.
-//
-// IMPORTANTE (limitaciones reales de las plataformas):
-//   - ANDROID con "development build": usa el módulo nativo
-//     `expo-android-app-list` y devuelve las apps reales.
-//   - EXPO GO: Expo Go NO incluye ese módulo nativo, así que no se pueden leer
-//     las apps reales. En ese caso devolvemos una lista de DEMOSTRACIÓN para
-//     poder probar la interfaz, y marcamos `isDemo: true`.
-//   - iOS: Apple no permite listar las apps instaladas. También usa la lista
-//     de demostración.
-//
-// Nunca lanza errores hacia afuera: siempre devuelve un resultado usable.
-// -----------------------------------------------------------------------------
 
 import { Platform } from 'react-native';
 

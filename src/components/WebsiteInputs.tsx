@@ -19,9 +19,11 @@ interface WebsiteInputsProps {
   values: string[];
   onChange: (next: string[]) => void;
   max?: number;
+  /** Si es true, marca en rojo TODOS los campos inválidos (se usa al intentar guardar). */
+  showAllErrors?: boolean;
 }
 
-const WebsiteInputs: React.FC<WebsiteInputsProps> = ({ values, onChange, max = MAX_WEBSITES }) => {
+const WebsiteInputs: React.FC<WebsiteInputsProps> = ({ values, onChange, max = MAX_WEBSITES, showAllErrors = false }) => {
   // Índices de campos que el usuario ya tocó y abandonó (para no marcar error mientras escribe).
   const [touched, setTouched] = useState<Set<number>>(new Set());
 
@@ -47,7 +49,7 @@ const WebsiteInputs: React.FC<WebsiteInputsProps> = ({ values, onChange, max = M
     <View style={styles.wrap}>
       {values.map((value, index) => {
         const isLast = index === values.length - 1;
-        const invalid = touched.has(index) && value.trim() !== '' && normalizeWebsite(value) === null;
+        const invalid = (touched.has(index) || showAllErrors) && value.trim() !== '' && normalizeWebsite(value) === null;
 
         return (
           <View key={index}>

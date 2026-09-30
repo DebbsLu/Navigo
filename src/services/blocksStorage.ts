@@ -1,16 +1,8 @@
 // services/blocksStorage.ts
-// -----------------------------------------------------------------------------
 // Capa de almacenamiento (AsyncStorage) para bloqueos y lectura de misiones.
-//
-// Reglas de esta capa:
-//   - NUNCA devuelve datos corruptos: filtra lo inválido.
-//   - NUNCA sobreescribe datos si no pudo leerlos bien (evita perder bloqueos).
-//   - Todos los errores se convierten en `StorageError` con mensaje en español
-//     listo para mostrarle al usuario.
-// -----------------------------------------------------------------------------
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Block, BlockedApp, Mission } from '../types/blocks';
+import { Block, BlockedApp, Mission, MissionStep, StepStatus } from '../types/blocks';
 
 /** Clave donde se guardan los bloqueos. */
 export const BLOCKS_STORAGE_KEY = '@blocks_list_key';
@@ -19,6 +11,13 @@ export const BLOCKS_STORAGE_KEY = '@blocks_list_key';
  * DEBE coincidir con `STORAGE_KEY` de Task_home.tsx.
  */
 export const TASKS_STORAGE_KEY = '@tasks_list_key';
+
+/**
+ * Prefijo de la clave donde Infinity_canvas guarda los pasos (chunks) de cada
+ * misión: `@canvas_chunks_${taskId}`. DEBE coincidir con GET_CANVAS_KEY de
+ * Infinity_canvas.tsx. El id de la misión es el mismo `taskId` del lienzo.
+ */
+export const CANVAS_STORAGE_PREFIX = '@canvas_chunks_';
 
 /** Error con mensaje amigable + el error original para depurar. */
 export class StorageError extends Error {
@@ -104,6 +103,8 @@ const toBlock = (v: unknown): Block | null => {
     startTime: typeof v.startTime === 'string' ? v.startTime : undefined,
     endTime: typeof v.endTime === 'string' ? v.endTime : undefined,
     usageMinutes: typeof v.usageMinutes === 'number' ? v.usageMinutes : undefined,
+    stepId: typeof v.stepId === 'string' ? v.stepId : undefined,
+    stepTitle: typeof v.stepTitle === 'string' ? v.stepTitle : undefined,
     apps: toBlockedApps(v.apps),
     websites: Array.isArray(v.websites)
       ? v.websites.filter((w): w is string => typeof w === 'string')
@@ -157,5 +158,28 @@ export const loadMissions = async (): Promise<Mission[]> => {
       id: t.id as string,
       title: t.title as string,
       date: typeof t.date === 'string' ? t.date : undefined,
+    }));
+};
+
+const STEP_STATUSES: StepStatus[] = ['avanzando', 'completado', 'no_iniciado'];
+
+/**
+ * Lee los pasos (chunks) del lienzo de una misión.
+ * Si la misión nunca abrió su lienzo, no hay nada guardado y devuelve [].
+ * @param missionId id de la misión (= taskId del lienzo).
+ */
+export const loadMissionSteps = async (missionId: string): Promise<MissionStep[]> => {
+  const data = await readJson(`${CANVAS_STORAGE_PREFIX}${missionId}`, 'los pasos de la misión');
+  if (data === null) return [];
+  if (!Array.isArray(data)) throw new StorageError('Los datos de los pasos están dañados.');
+
+  return data
+    .filter(isObject)
+    .filter((c) => typeof c.id === 'string')
+    .map((c) => ({
+      id: c.id as string,
+      // Un paso recién creado puede tener el título vacío.
+      title: typeof c.title === 'string' && c.title.trim() !== '' ? c.title.trim() : 'Paso sin título',
+      status: STEP_STATUSES.includes(c.status as StepStatus) ? (c.status as StepStatus) : 'no_iniciado',
     }));
 };

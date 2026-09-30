@@ -1,9 +1,9 @@
 // Pantalla "Bloqueos"
 // Muestra la lista de bloqueos guardados (AsyncStorage).
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
+  LayoutChangeEvent,
   Modal,
   Pressable,
   Platform,
@@ -33,16 +33,27 @@ import {
   BlockFormData,
   BlockTypeId,
   Mission,
+  MissionStep,
+  StepStatus,
   UsageUnit,
 } from '../types/blocks';
 import {
   BLOCK_TYPE_SHORT,
+  FormErrors,
+  FormField,
   MAX_NAME_LENGTH,
   blockSummary,
   buildBlock,
   validateBlockForm,
 } from '../services/blockUtils';
-import { StorageError, addBlock, deleteBlock, loadBlocks, loadMissions } from '../services/blocksStorage';
+import {
+  StorageError,
+  addBlock,
+  deleteBlock,
+  loadBlocks,
+  loadMissionSteps,
+  loadMissions,
+} from '../services/blocksStorage';
 
 /* Paleta */
 const C = {
@@ -64,12 +75,15 @@ const BLOCK_TYPES: { id: BlockTypeId; label: string; desc: string }[] = [
   { id: 'pasos', label: 'Bloqueo por pasos', desc: 'Debes terminar este paso para desbloquear' },
 ];
 
-// Pasos de ejemplo (el bloqueo por pasos aún no tiene lógica)
-const MOCK_STEPS = [
-  { id: 's1', title: 'Paso 1: Tomar agua' },
-  { id: 's2', title: 'Paso 2: Estirarse 5 minutos' },
-  { id: 's3', title: 'Paso 3: Escribir una nota' },
-];
+// Etiqueta y color de cada estado de un paso (mismos colores que ChunkNode).
+const STEP_STATUS: Record<StepStatus, { label: string; color: string }> = {
+  avanzando: { label: 'Avanzando', color: '#853ACF' },
+  completado: { label: 'Completado', color: '#C694EB' },
+  no_iniciado: { label: 'No iniciado', color: '#DED1EB' },
+};
+
+/** Orden en que se revisan los errores para desplazar la pantalla al primero. */
+const SCROLL_ORDER: FormField[] = ['name', 'days', 'mission', 'type', 'schedule', 'usage', 'step', 'target'];
 
 const OPTIONS = [
   { key: 'descanso', label: 'Permitir tomar descanso', extra: '(X minutos)' },
@@ -108,15 +122,24 @@ const Checkbox: React.FC<{ checked: boolean; onPress: () => void; label: string;
   </TouchableOpacity>
 );
 
+/** Mensaje de error en rojo, justo debajo de un campo. No muestra nada si no hay mensaje. */
+const FieldError: React.FC<{ message?: string | null }> = ({ message }) =>
+  message ? <Text style={styles.errorText}>{message}</Text> : null;
+
 const SelectField: React.FC<{
   value?: string;
   placeholder: string;
   open: boolean;
   onToggle: () => void;
+  error?: boolean;
   children?: React.ReactNode;
-}> = ({ value, placeholder, open, onToggle, children }) => (
+}> = ({ value, placeholder, open, onToggle, error, children }) => (
   <View>
-    <TouchableOpacity activeOpacity={0.8} onPress={onToggle} style={styles.field}>
+    <TouchableOpacity
+      activeOpacity={0.8}
+      onPress={onToggle}
+      style={[styles.field, error && styles.fieldError]}
+    >
       <Text style={[styles.fieldText, !value && { color: 'rgba(255,255,255,0.35)' }]} numberOfLines={1}>
         {value ?? placeholder}
       </Text>
@@ -134,6 +157,8 @@ const Blocks: React.FC = () => {
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [loadingBlocks, setLoadingBlocks] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null); // tarjeta esperando confirmar borrado
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   /* ── Modal y guardado ── */
   const [modalVisible, setModalVisible] = useState(false);
@@ -141,6 +166,19 @@ const Blocks: React.FC = () => {
 
   /* ── Misiones disponibles (vienen de Task_home) ── */
   const [missions, setMissions] = useState<Mission[]>([]);
+  const [missionsError, setMissionsError] = useState<string | null>(null);
+
+  /* ── Pasos de la misión elegida (vienen del lienzo de esa misión) ── */
+  const [steps, setSteps] = useState<MissionStep[]>([]);
+  const [stepsLoading, setStepsLoading] = useState(false);
+  const [stepsError, setStepsError] = useState<string | null>(null);
+  const stepsRequest = useRef(0); // descarta respuestas viejas si se cambia de misión rápido
+
+  /* ── Errores del formulario, por campo ── */
+  const [errors, setErrors] = useState<FormErrors>({});
+  const [submitError, setSubmitError] = useState<string | null>(null); // fallo al guardar
+  const scrollRef = useRef<ScrollView>(null);
+  const sectionY = useRef<Partial<Record<FormField, number>>>({}); // posición vertical de cada sección
 
   // Formulario 
   const [enabled, setEnabled] = useState(true);
@@ -153,21 +191,38 @@ const Blocks: React.FC = () => {
   const [apps, setApps] = useState<BlockedApp[]>([]);
   const [openField, setOpenField] = useState<'mision' | 'tipo' | 'paso' | null>(null);
 
-  // Campos según el tipo de bloqueo (solo visual)
+  // Campos según el tipo de bloqueo 
   const [startTime, setStartTime] = useState<Date | null>(null);
   const [endTime, setEndTime] = useState<Date | null>(null);
   const [pickerFor, setPickerFor] = useState<'start' | 'end' | null>(null);
   const [usageValue, setUsageValue] = useState('');
-  const [usageUnit, setUsageUnit] = useState<'min' | 'h'>('min');
+  const [usageUnit, setUsageUnit] = useState<UsageUnit>('min')
   const [stepId, setStepId] = useState<string | null>(null);
 
-  const toggleDay = (i: number) => setDays((d) => d.map((v, idx) => (idx === i ? !v : v)));
+  /** Quita el error de uno o más campos (se llama cuando el usuario los corrige). */
+  const clearError = (...fields: FormField[]) =>
+    setErrors((prev) => {
+      if (!fields.some((f) => prev[f] !== undefined)) return prev;
+      const next = { ...prev };
+      fields.forEach((f) => delete next[f]);
+      return next;
+    });
+
+  /** Guarda la posición de una sección para poder desplazar la pantalla hasta ella. */
+  const reg = (field: FormField) => (e: LayoutChangeEvent) => {
+    sectionY.current[field] = e.nativeEvent.layout.y;
+  };
+
+  const toggleDay = (i: number) => {
+    setDays((d) => d.map((v, idx) => (idx === i ? !v : v)));
+    clearError('days');
+  };
   const toggleOpt = (k: string) => setOpts((o) => ({ ...o, [k]: !o[k] }));
   const toggleField = (f: 'mision' | 'tipo' | 'paso') => setOpenField((cur) => (cur === f ? null : f));
 
   const mission = missions.find((m) => m.id === missionId);
   const type = BLOCK_TYPES.find((t) => t.id === typeId);
-  const step = MOCK_STEPS.find((x) => x.id === stepId);
+  const step = steps.find((x) => x.id === stepId);
 
   /** Se ejecuta cuando el usuario elige una hora en el reloj. */
   const onPickTime = (_: unknown, date?: Date) => {
@@ -175,9 +230,32 @@ const Blocks: React.FC = () => {
     if (!date) return;
     if (pickerFor === 'start') setStartTime(date);
     if (pickerFor === 'end') setEndTime(date);
+    clearError('schedule');
   };
 
-   /* ───────────── Carga de la lista ───────────── */
+  /** Elige una misión y carga los pasos de su lienzo. */
+  const selectMission = async (id: string) => {
+    setMissionId(id);
+    setOpenField(null);
+    clearError('mission', 'step');
+    setStepId(null); // el paso elegido antes pertenecía a otra misión
+
+    const req = ++stepsRequest.current;
+    setSteps([]);
+    setStepsError(null);
+    setStepsLoading(true);
+    try {
+      const loaded = await loadMissionSteps(id);
+      if (req === stepsRequest.current) setSteps(loaded);
+    } catch (e) {
+      console.error('[Blocks] Error al cargar pasos:', e);
+      if (req === stepsRequest.current) setStepsError(errorMessage(e, 'No se pudieron cargar los pasos.'));
+    } finally {
+      if (req === stepsRequest.current) setStepsLoading(false);
+    }
+  };
+
+  /* ───────────── Carga de la lista ───────────── */
 
   /** Lee los bloqueos guardados. Si falla, muestra el error con opción de reintentar. */
   const refreshBlocks = useCallback(async () => {
@@ -217,6 +295,14 @@ const Blocks: React.FC = () => {
     setUsageValue('');
     setUsageUnit('min');
     setStepId(null);
+    stepsRequest.current++; // cancela cualquier carga de pasos pendiente
+    setSteps([]);
+    setStepsLoading(false);
+    setStepsError(null);
+    setErrors({});
+    setSubmitError(null);
+    setMissionsError(null);
+    sectionY.current = {};
   };
 
   /** Abre el formulario: lo limpia y recarga las misiones de Task_home. */
@@ -227,7 +313,7 @@ const Blocks: React.FC = () => {
     } catch (e) {
       console.error('[Blocks] Error al cargar misiones:', e);
       setMissions([]);
-      Alert.alert('Misiones', errorMessage(e, 'No se pudieron cargar las misiones.'));
+      setMissionsError(errorMessage(e, 'No se pudieron cargar las misiones.')); // se ve bajo el campo de misión
     }
     setModalVisible(true);
   };
@@ -243,57 +329,65 @@ const Blocks: React.FC = () => {
     endTime,
     usageValue,
     usageUnit,
+    stepId,
     apps,
     websites,
     options: opts,
   });
 
+  /** Desplaza el formulario hasta el primer campo con error. */
+  const scrollToFirstError = (found: FormErrors) => {
+    const first = SCROLL_ORDER.find(
+      (f) => found[f] !== undefined || (f === 'target' && found.websites !== undefined),
+    );
+    if (!first) return;
+    const y = sectionY.current[first];
+    if (y !== undefined) scrollRef.current?.scrollTo({ y: Math.max(0, y - 8), animated: true });
+  };
+
   /** Botón "+ añadir bloqueo": valida, guarda y cierra el modal. */
   const handleSubmit = async () => {
     if (saving) return; // ya hay un guardado en curso
+    setSubmitError(null);
 
     const form = buildFormData();
 
-    // Validar. Si hay errores, se muestran todos juntos y NO se guarda.
-    const errors = validateBlockForm(form, missions);
-    if (errors.length > 0) {
-      Alert.alert('Revisa el formulario', errors.map((e) => `• ${e}`).join('\n'));
+    // 1. Validar. Si hay errores, se marcan bajo cada campo y NO se guarda.
+    const found = validateBlockForm(form, missions, steps);
+    if (Object.keys(found).length > 0) {
+      setErrors(found);
+      scrollToFirstError(found);
       return;
     }
+    setErrors({});
 
-    //  Construir y guardar.
+    // 2. Construir y guardar.
     setSaving(true);
     try {
-      const block = buildBlock(form, missions);
+      const block = buildBlock(form, missions, steps);
       const updated = await addBlock(block);
       setBlocks(updated); // la lista ya muestra el bloqueo nuevo
       setListError(null);
-      setModalVisible(false); // redirige a la lista de bloqueos
+      setModalVisible(false); // "redirige" a la lista de bloqueos
     } catch (e) {
       console.error('[Blocks] Error al guardar el bloqueo:', e);
-      Alert.alert('No se pudo guardar', errorMessage(e, 'Ocurrió un error inesperado. Inténtalo de nuevo.'));
+      setSubmitError(errorMessage(e, 'Ocurrió un error inesperado. Inténtalo de nuevo.')); // se ve junto al botón
     } finally {
       setSaving(false);
     }
   };
 
-  /** Mantener presionada una tarjeta: pide confirmación y borra el bloqueo. */
-  const confirmDelete = (block: Block) => {
-    Alert.alert('Eliminar bloqueo', `¿Eliminar "${block.name}"?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Eliminar',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            setBlocks(await deleteBlock(block.id));
-          } catch (e) {
-            console.error('[Blocks] Error al borrar:', e);
-            Alert.alert('No se pudo eliminar', errorMessage(e, 'Inténtalo de nuevo.'));
-          }
-        },
-      },
-    ]);
+  /** Mantener presionada una tarjeta: borra el bloqueo. */
+  const handleDelete = async (block: Block) => {
+    setDeleteError(null);
+    try {
+      setBlocks(await deleteBlock(block.id));
+    } catch (e) {
+      console.error('[Blocks] Error al borrar:', e);
+      setDeleteError(errorMessage(e, 'No se pudo eliminar el bloqueo. Inténtalo de nuevo.'));
+    } finally {
+      setPendingDeleteId(null);
+    }
   };
 
   return (
@@ -302,7 +396,7 @@ const Blocks: React.FC = () => {
         <ViewEncabezado title="Bloqueos" />
 
         <View style={styles.addWrap}>
-          <BtnCircleBig size={96} onPress={() => setModalVisible(true)} />
+          <BtnCircleBig size={96} onPress={openModal} />
         </View>
 
         {/* Lista de bloqueos */}
@@ -324,18 +418,42 @@ const Blocks: React.FC = () => {
             </View>
           )}
 
+          {!loadingBlocks && deleteError && <Text style={[styles.errorText, { marginBottom: 10 }]}>{deleteError}</Text>}
+
           {!loadingBlocks &&
             blocks.map((b) => (
-              <Pressable key={b.id} onLongPress={() => confirmDelete(b)} delayLongPress={500}>
+              <Pressable
+                key={b.id}
+                style={styles.cardWrap}
+                onLongPress={() => {
+                  setDeleteError(null);
+                  setPendingDeleteId(b.id); // mantener presionado -> pide confirmación aquí mismo
+                }}
+                delayLongPress={500}
+              >
                 <View style={[styles.card, !b.enabled && { opacity: 0.55 }]}>
                   <View style={styles.datePill}>
-                    <Text style={styles.datePillText}>{blockSummary(b)}</Text>
+                    <Text style={styles.datePillText} numberOfLines={1}>{blockSummary(b)}</Text>
                   </View>
                   <Text style={styles.cardName} numberOfLines={1}>
                     {b.name} - <Text style={{ color: C.purpleLight, fontWeight: '700' }}>{BLOCK_TYPE_SHORT[b.type]}</Text>
                   </Text>
                   <BtnCircleSmall size={40} />
                 </View>
+
+                {pendingDeleteId === b.id && (
+                  <View style={styles.confirmBar}>
+                    <Text style={styles.confirmText}>¿Eliminar este bloqueo?</Text>
+                    <View style={styles.confirmBtns}>
+                      <TouchableOpacity onPress={() => setPendingDeleteId(null)} style={styles.confirmCancel}>
+                        <Text style={styles.confirmCancelText}>Cancelar</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => handleDelete(b)} style={styles.confirmDelete}>
+                        <Text style={styles.confirmDeleteText}>Eliminar</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
               </Pressable>
             ))}
         </ScrollView>
@@ -353,6 +471,7 @@ const Blocks: React.FC = () => {
         <View style={[styles.overlay, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 12 }]}>
           <View style={styles.sheet}>
             <ScrollView
+              ref={scrollRef}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={styles.sheetContent}
@@ -370,100 +489,123 @@ const Blocks: React.FC = () => {
                 <BtnClose onPress={() => setModalVisible(false)} size={14} />
               </View>
 
-              <Label>Nombre del bloqueo:</Label>
-              <TextInput
-                value={name}
-                onChangeText={setName}
-                maxLength={MAX_NAME_LENGTH}
-                style={styles.field}
-                placeholder="Ej. Bloqueo de apps de mensajería"
-                placeholderTextColor="rgba(255,255,255,0.35)"
-                selectionColor={C.purpleLight}
-              />
-
-              <Label>Selecciona los días en los que se aplica:</Label>
-              <View style={styles.daysRow}>
-                {DAYS.map((d, i) => (
-                  <TouchableOpacity
-                    key={i}
-                    activeOpacity={0.7}
-                    onPress={() => toggleDay(i)}
-                    style={[styles.dayBox, days[i] && styles.dayBoxOn]}
-                  >
-                    <Text style={styles.dayText}>{d}</Text>
-                    {days[i] && (
-                      <View style={styles.dayCheck}>
-                        <Ionicons name="checkmark" size={10} color="#FFFFFF" />
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                ))}
+              <View onLayout={reg('name')}>
+                <Label>Nombre del bloqueo:</Label>
+                <TextInput
+                  value={name}
+                  onChangeText={(t) => {
+                    setName(t);
+                    clearError('name');
+                  }}
+                  maxLength={MAX_NAME_LENGTH}
+                  style={[styles.field, errors.name && styles.fieldError]}
+                  placeholder="Ej. Bloqueo de apps de mensajería"
+                  placeholderTextColor="rgba(255,255,255,0.35)"
+                  selectionColor={C.purpleLight}
+                />
+                <FieldError message={errors.name} />
               </View>
 
-              <Label>Selecciona la misión</Label>
-              <SelectField
-                value={mission?.title}
-                placeholder="Elige una misión"
-                open={openField === 'mision'}
-                onToggle={() => toggleField('mision')}
-              >
-                {missions.length === 0 && (
-                  <Text style={styles.emptyDropdown}>
-                    Aún no tienes misiones. Créalas en la pantalla de tareas.
-                  </Text>
-                )}
-                {missions.map((m) => (
-                  <TouchableOpacity
-                    key={m.id}
-                    activeOpacity={0.8}
-                    style={[styles.missionCard, m.id === missionId && styles.missionCardOn]}
-                    onPress={() => {
-                      setMissionId(m.id);
-                      setOpenField(null);
-                    }}
-                  >
-                    <Text style={styles.missionTitle} numberOfLines={1}>{m.title}</Text>
-                    {m.date ? <Text style={styles.missionDate}>{m.date}</Text> : null}
-                  </TouchableOpacity>
-                ))}
-              </SelectField>
+              <View onLayout={reg('days')}>
+                <Label>Selecciona los días en los que se aplica:</Label>
+                <View style={styles.daysRow}>
+                  {DAYS.map((d, i) => (
+                    <TouchableOpacity
+                      key={i}
+                      activeOpacity={0.7}
+                      onPress={() => toggleDay(i)}
+                      style={[styles.dayBox, days[i] && styles.dayBoxOn, errors.days && !days[i] && styles.dayBoxError]}
+                    >
+                      <Text style={styles.dayText}>{d}</Text>
+                      {days[i] && (
+                        <View style={styles.dayCheck}>
+                          <Ionicons name="checkmark" size={10} color="#FFFFFF" />
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <FieldError message={errors.days} />
+              </View>
 
-              <Label>Selecciona el tipo de bloqueo:</Label>
-              <SelectField
-                value={type?.label}
-                placeholder="Elige un tipo"
-                open={openField === 'tipo'}
-                onToggle={() => toggleField('tipo')}
-              >
-                {BLOCK_TYPES.map((t) => (
-                  <TouchableOpacity
-                    key={t.id}
-                    activeOpacity={0.8}
-                    style={[styles.typeItem, t.id === typeId && styles.typeItemOn]}
-                    onPress={() => {
-                      setTypeId(t.id);
-                      setOpenField(null);
-                      setPickerFor(null); // cierra el reloj si estaba abierto
-                    }}
-                  >
-                    <Text style={styles.typeText}>
-                      <Text style={{ fontWeight: '700' }}>{t.label}:</Text> {t.desc}
+              <View onLayout={reg('mission')}>
+                <Label>Selecciona la misión</Label>
+                <SelectField
+                  value={mission?.title}
+                  placeholder="Elige una misión"
+                  open={openField === 'mision'}
+                  onToggle={() => toggleField('mision')}
+                  error={!!(errors.mission || missionsError)}
+                >
+                  {missions.length === 0 && (
+                    <Text style={styles.emptyDropdown}>
+                      Aún no tienes misiones. Créalas en la pantalla de tareas.
                     </Text>
-                  </TouchableOpacity>
-                ))}
-              </SelectField>
+                  )}
+                  {missions.map((m) => (
+                    <TouchableOpacity
+                      key={m.id}
+                      activeOpacity={0.8}
+                      style={[styles.missionCard, m.id === missionId && styles.missionCardOn]}
+                      onPress={() => selectMission(m.id)}
+                    >
+                      <Text style={styles.missionTitle} numberOfLines={1}>{m.title}</Text>
+                      {m.date ? <Text style={styles.missionDate}>{m.date}</Text> : null}
+                    </TouchableOpacity>
+                  ))}
+                </SelectField>
+                <FieldError message={errors.mission ?? missionsError} />
+              </View>
 
-              <Label>Selecciona las aplicaciones</Label>
-              <AppSelector selected={apps} onChange={setApps} />
+              <View onLayout={reg('type')}>
+                <Label>Selecciona el tipo de bloqueo:</Label>
+                <SelectField
+                  value={type?.label}
+                  placeholder="Elige un tipo"
+                  open={openField === 'tipo'}
+                  onToggle={() => toggleField('tipo')}
+                  error={!!errors.type}
+                >
+                  {BLOCK_TYPES.map((t) => (
+                    <TouchableOpacity
+                      key={t.id}
+                      activeOpacity={0.8}
+                      style={[styles.typeItem, t.id === typeId && styles.typeItemOn]}
+                      onPress={() => {
+                        setTypeId(t.id);
+                        setOpenField(null);
+                        setPickerFor(null); // cierra el reloj si estaba abierto
+                        clearError('type', 'schedule', 'usage', 'step');
+                      }}
+                    >
+                      <Text style={styles.typeText}>
+                        <Text style={{ fontWeight: '700' }}>{t.label}:</Text> {t.desc}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </SelectField>
+                <FieldError message={errors.type} />
+              </View>
+
+              <View>
+                <Label>Selecciona las aplicaciones</Label>
+                <AppSelector
+                  selected={apps}
+                  onChange={(next) => {
+                    setApps(next);
+                    clearError('target');
+                  }}
+                />
+              </View>
 
               {/* ── Sección que cambia según el tipo de bloqueo ── */}
               {typeId === 'regular' && (
-                <>
+                <View onLayout={reg('schedule')}>
                   <Label>Selecciona hora de inicio y hora de finalización</Label>
                   <View style={styles.timeRow}>
                     <TouchableOpacity
                       activeOpacity={0.8}
-                      style={[styles.field, styles.timeField]}
+                      style={[styles.field, styles.timeField, errors.schedule && styles.fieldError]}
                       onPress={() => setPickerFor(pickerFor === 'start' ? null : 'start')}
                     >
                       <Text style={[styles.fieldText, !startTime && styles.placeholder]}>
@@ -473,7 +615,7 @@ const Blocks: React.FC = () => {
                     </TouchableOpacity>
                     <TouchableOpacity
                       activeOpacity={0.8}
-                      style={[styles.field, styles.timeField]}
+                      style={[styles.field, styles.timeField, errors.schedule && styles.fieldError]}
                       onPress={() => setPickerFor(pickerFor === 'end' ? null : 'end')}
                     >
                       <Text style={[styles.fieldText, !endTime && styles.placeholder]}>
@@ -493,29 +635,36 @@ const Blocks: React.FC = () => {
                       onDismiss={() => setPickerFor(null)} // cerrar sin elegir hora
                     />
                   )}
-                </>
+                  <FieldError message={errors.schedule} />
+                </View>
               )}
 
               {typeId === 'uso' && (
-                <>
+                <View onLayout={reg('usage')}>
                   <Label>Selecciona después de cuánto tiempo se debe bloquear</Label>
                   <View style={styles.timeRow}>
                     <TextInput
                       value={usageValue}
-                      onChangeText={(t) => setUsageValue(t.replace(/[^0-9]/g, ''))}
+                      onChangeText={(t) => {
+                        setUsageValue(t.replace(/[^0-9]/g, ''));
+                        clearError('usage');
+                      }}
                       keyboardType="number-pad"
                       maxLength={4}
                       placeholder="0"
                       placeholderTextColor="rgba(255,255,255,0.35)"
                       selectionColor={C.purpleLight}
-                      style={[styles.field, styles.timeField]}
+                      style={[styles.field, styles.timeField, errors.usage && styles.fieldError]}
                     />
                     <View style={styles.unitSwitch}>
                       {(['min', 'h'] as const).map((u) => (
                         <TouchableOpacity
                           key={u}
                           activeOpacity={0.8}
-                          onPress={() => setUsageUnit(u)}
+                          onPress={() => {
+                            setUsageUnit(u);
+                            clearError('usage');
+                          }}
                           style={[styles.unitBtn, usageUnit === u && styles.unitBtnOn]}
                         >
                           <Text style={styles.unitText}>{u === 'min' ? 'Minutos' : 'Horas'}</Text>
@@ -523,37 +672,66 @@ const Blocks: React.FC = () => {
                       ))}
                     </View>
                   </View>
-                </>
+                  <FieldError message={errors.usage} />
+                </View>
               )}
 
               {typeId === 'pasos' && (
-                <>
+                <View onLayout={reg('step')}>
                   <Label>Selecciona el paso</Label>
                   <SelectField
                     value={step?.title}
-                    placeholder="Elige un paso"
+                    placeholder={
+                      !mission ? 'Primero elige una misión' : stepsLoading ? 'Cargando pasos...' : 'Elige un paso'
+                    }
                     open={openField === 'paso'}
                     onToggle={() => toggleField('paso')}
+                    error={!!(errors.step || stepsError)}
                   >
-                    {MOCK_STEPS.map((x) => (
+                    {stepsLoading && <ActivityIndicator color={C.purpleLight} style={{ marginVertical: 12 }} />}
+                    {!stepsLoading && !mission && (
+                      <Text style={styles.emptyDropdown}>Elige una misión para ver sus pasos.</Text>
+                    )}
+                    {!stepsLoading && mission && !stepsError && steps.length === 0 && (
+                      <Text style={styles.emptyDropdown}>
+                        Esta misión aún no tiene pasos. Créalos en su lienzo.
+                      </Text>
+                    )}
+                    {steps.map((x) => (
                       <TouchableOpacity
                         key={x.id}
                         activeOpacity={0.8}
-                        style={[styles.typeItem, x.id === stepId && styles.typeItemOn]}
+                        style={[styles.typeItem, styles.stepRow, x.id === stepId && styles.typeItemOn]}
                         onPress={() => {
                           setStepId(x.id);
                           setOpenField(null);
+                          clearError('step');
                         }}
                       >
-                        <Text style={styles.typeText}>{x.title}</Text>
+                        <View style={[styles.stepDot, { backgroundColor: STEP_STATUS[x.status].color }]} />
+                        <Text style={[styles.typeText, { flex: 1 }]} numberOfLines={2}>{x.title}</Text>
+                        <Text style={[styles.stepStatus, { color: STEP_STATUS[x.status].color }]}>
+                          {STEP_STATUS[x.status].label}
+                        </Text>
                       </TouchableOpacity>
                     ))}
                   </SelectField>
-                </>
+                  <FieldError message={errors.step ?? stepsError} />
+                </View>
               )}
 
-              <Label>Escribe las páginas web</Label>
-              <WebsiteInputs values={websites} onChange={setWebsites} />
+              <View onLayout={reg('target')}>
+                <Label>Escribe las páginas web</Label>
+                <WebsiteInputs
+                  values={websites}
+                  onChange={(next) => {
+                    setWebsites(next);
+                    clearError('target', 'websites');
+                  }}
+                  showAllErrors={!!errors.websites}
+                />
+                <FieldError message={errors.target} />
+              </View>
 
               <View style={styles.optionsWrap}>
                 {OPTIONS.map((o) => (
@@ -567,6 +745,12 @@ const Blocks: React.FC = () => {
                 ))}
               </View>
 
+              {Object.keys(errors).length > 0 && (
+                <Text style={[styles.errorText, { marginTop: 18 }]}>
+                  Revisa los campos marcados en rojo para poder guardar.
+                </Text>
+              )}
+
               <TouchableOpacity
                 activeOpacity={0.85}
                 style={[styles.addBtn, saving && { opacity: 0.6 }]}
@@ -575,6 +759,12 @@ const Blocks: React.FC = () => {
               >
                 <Text style={styles.addBtnText}>{saving ? 'Guardando...' : '+ añadir bloqueo'}</Text>
               </TouchableOpacity>
+
+              {submitError && (
+                <View style={styles.submitError}>
+                  <Text style={styles.errorText}>No se pudo guardar: {submitError}</Text>
+                </View>
+              )}
             </ScrollView>
           </View>
         </View>
@@ -614,10 +804,11 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     paddingVertical: 12,
     paddingHorizontal: 12,
-    marginBottom: 12,
     gap: 10,
   },
+  cardWrap: { marginBottom: 12 },
   datePill: {
+    maxWidth: 140,
     backgroundColor: C.purple,
     borderRadius: 999,
     paddingVertical: 6,
@@ -665,6 +856,18 @@ const styles = StyleSheet.create({
   },
   fieldText: { color: C.text, fontSize: 14, flex: 1, marginRight: 8 },
 
+  /* Errores (se muestran debajo de cada campo) */
+  fieldError: { borderWidth: 1.5, borderColor: '#FF6B81' },
+  errorText: { color: '#FF6B81', fontSize: 12, lineHeight: 17, marginTop: 6 },
+  submitError: {
+    marginTop: 14,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,107,129,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,107,129,0.45)',
+  },
+
   /* Días */
   daysRow: { flexDirection: 'row', justifyContent: 'space-between' },
   dayBox: {
@@ -677,6 +880,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  dayBoxError: { borderColor: '#FF6B81' },
   dayBoxOn: { backgroundColor: 'rgba(133,58,207,0.25)', borderColor: 'rgba(198,148,235,0.6)' },
   dayText: { color: C.text, fontSize: 15, fontWeight: '700' },
   dayCheck: {
@@ -720,8 +924,31 @@ const styles = StyleSheet.create({
   typeItem: { borderRadius: 10, paddingVertical: 10, paddingHorizontal: 10 },
   typeItemOn: { backgroundColor: 'rgba(133,58,207,0.25)' },
   typeText: { color: C.text, fontSize: 12, lineHeight: 17 },
+  stepRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  stepDot: { width: 10, height: 10, borderRadius: 5 },
+  stepStatus: { fontSize: 11, fontWeight: '600' },
 
- /* Campos por tipo de bloqueo */
+  /* Confirmación de borrado dentro de la tarjeta */
+  confirmBar: {
+    marginTop: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#1B1928',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,107,129,0.45)',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+  },
+  confirmText: { color: C.text, fontSize: 12, flex: 1 },
+  confirmBtns: { flexDirection: 'row', gap: 8 },
+  confirmCancel: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8, backgroundColor: C.field },
+  confirmCancelText: { color: C.textSoft, fontSize: 12, fontWeight: '600' },
+  confirmDelete: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8, backgroundColor: '#FF6B81' },
+  confirmDeleteText: { color: '#1A0B10', fontSize: 12, fontWeight: '700' },
+
+  /* Campos por tipo de bloqueo */
   placeholder: { color: 'rgba(255,255,255,0.35)' },
   timeRow: { flexDirection: 'row', gap: 12, alignItems: 'center' },
   timeField: { flex: 1 },

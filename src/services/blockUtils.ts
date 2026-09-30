@@ -1,18 +1,16 @@
 // services/blockUtils.ts
-// -----------------------------------------------------------------------------
 // Funciones PURAS (sin React ni almacenamiento) para:
-//   1. Normalizar datos (hora, páginas web, minutos de uso).
-//   2. Validar el formulario.
-//   3. Construir el objeto `Block` final.
-//   4. Dar formato de texto para la lista.
-// Al ser puras son fáciles de probar y de reutilizar.
-// -----------------------------------------------------------------------------
+// Normalizar datos (hora, páginas web, minutos de uso).
+// Validar el formulario.
+// Construir el objeto `Block` final.
+// Dar formato de texto para la lista.
 
 import {
   Block,
   BlockFormData,
   BlockTypeId,
   Mission,
+  MissionStep,
   UsageUnit,
 } from '../types/blocks';
 
@@ -75,56 +73,95 @@ export const parseUsageMinutes = (value: string, unit: UsageUnit): number | null
 /* ───────────────────────── Validación ───────────────────────── */
 
 /**
- * Revisa el formulario completo y devuelve una lista de mensajes de error.
- * Lista vacía = formulario válido.
+ * Campos del formulario que pueden tener error. Cada uno se muestra justo
+ * debajo de su campo en la pantalla.
+ *   schedule -> horas del bloqueo regular
+ *   usage    -> tiempo del bloqueo por uso
+ *   step     -> paso del bloqueo por pasos
+ *   target   -> "falta al menos una app o página web"
+ *   websites -> alguna página web no es válida (se resalta en rojo cada campo)
  */
-export const validateBlockForm = (form: BlockFormData, missions: Mission[]): string[] => {
-  const errors: string[] = [];
+export type FormField =
+  | 'name'
+  | 'days'
+  | 'mission'
+  | 'type'
+  | 'schedule'
+  | 'usage'
+  | 'step'
+  | 'target'
+  | 'websites';
+
+/** Un mensaje por campo con error. Objeto vacío = formulario válido. */
+export type FormErrors = Partial<Record<FormField, string>>;
+
+/**
+ * Revisa el formulario completo y devuelve los errores POR CAMPO.
+ * @param steps pasos cargados de la misión elegida (para el bloqueo por pasos).
+ */
+export const validateBlockForm = (
+  form: BlockFormData,
+  missions: Mission[],
+  steps: MissionStep[],
+): FormErrors => {
+  const errors: FormErrors = {};
 
   // 1. Nombre
   const name = form.name.trim();
-  if (!name) errors.push('Escribe un nombre para el bloqueo.');
+  if (!name) errors.name = 'Escribe un nombre para el bloqueo.';
   else if (name.length > MAX_NAME_LENGTH) {
-    errors.push(`El nombre no puede pasar de ${MAX_NAME_LENGTH} caracteres.`);
+    errors.name = `El nombre no puede pasar de ${MAX_NAME_LENGTH} caracteres.`;
   }
 
   // 2. Días
-  if (!form.days.some(Boolean)) errors.push('Selecciona al menos un día.');
+  if (!form.days.some(Boolean)) errors.days = 'Selecciona al menos un día.';
 
   // 3. Misión (debe existir aún en la lista de tareas)
   if (missions.length === 0) {
-    errors.push('No tienes misiones. Crea una primero en la pantalla de tareas.');
+    errors.mission = 'No tienes misiones. Crea una primero en la pantalla de tareas.';
   } else if (!form.missionId) {
-    errors.push('Selecciona una misión.');
+    errors.mission = 'Selecciona una misión.';
   } else if (!missions.some((m) => m.id === form.missionId)) {
-    errors.push('La misión elegida ya no existe. Elige otra.');
+    errors.mission = 'La misión elegida ya no existe. Elige otra.';
   }
 
   // 4. Tipo de bloqueo y sus campos propios
   if (!form.typeId) {
-    errors.push('Selecciona el tipo de bloqueo.');
+    errors.type = 'Selecciona el tipo de bloqueo.';
   } else if (form.typeId === 'regular') {
     if (!form.startTime || !form.endTime) {
-      errors.push('Selecciona la hora de inicio y la hora de fin.');
+      errors.schedule = 'Selecciona la hora de inicio y la hora de fin.';
     } else if (toHHmm(form.startTime) === toHHmm(form.endTime)) {
-      errors.push('La hora de inicio y la de fin no pueden ser iguales.');
+      errors.schedule = 'La hora de inicio y la de fin no pueden ser iguales.';
     }
   } else if (form.typeId === 'uso') {
     const minutes = parseUsageMinutes(form.usageValue, form.usageUnit);
-    if (minutes === null) errors.push('Escribe un tiempo de uso mayor a 0.');
-    else if (minutes > MAX_USAGE_MINUTES) errors.push('El tiempo de uso no puede superar 24 horas.');
+    if (minutes === null) errors.usage = 'Escribe un tiempo de uso mayor a 0.';
+    else if (minutes > MAX_USAGE_MINUTES) errors.usage = 'El tiempo de uso no puede superar 24 horas.';
   } else if (form.typeId === 'pasos') {
-    errors.push('El bloqueo por pasos aún no está disponible. Elige Regular o Por uso.');
+    // Si no hay misión válida, ese error ya se muestra en el campo de misión.
+    if (!errors.mission) {
+      if (steps.length === 0) {
+        errors.step = 'Esta misión aún no tiene pasos. Créalos en su lienzo.';
+      } else if (!form.stepId) {
+        errors.step = 'Selecciona un paso.';
+      } else if (!steps.some((s) => s.id === form.stepId)) {
+        errors.step = 'El paso elegido ya no existe. Elige otro.';
+      }
+    } else {
+      errors.step = 'Primero elige una misión para ver sus pasos.';
+    }
   }
 
   // 5. Apps o páginas web (al menos una de las dos)
   const filledSites = form.websites.filter((w) => w.trim() !== '');
-  const invalidSites = filledSites.filter((w) => normalizeWebsite(w) === null);
-  if (invalidSites.length > 0) {
-    errors.push(`Página web no válida: "${invalidSites[0].trim()}". Ejemplo: instagram.com`);
+  const hasInvalidSite = filledSites.some((w) => normalizeWebsite(w) === null);
+  if (hasInvalidSite) {
+    // Cada campo inválido muestra su propio mensaje (ver WebsiteInputs).
+    errors.websites = 'Hay páginas web no válidas.';
   }
   if (form.apps.length === 0 && filledSites.length === 0) {
-    errors.push('Selecciona al menos una aplicación o escribe una página web.');
+    errors.target = 'Selecciona al menos una aplicación o escribe una página web.';
   }
 
   return errors;
@@ -137,13 +174,14 @@ export const validateBlockForm = (form: BlockFormData, missions: Mission[]): str
  * IMPORTANTE: llamar solo después de que `validateBlockForm` devolvió [].
  * Si algo no cuadra lanza un Error (así nunca se guarda un bloqueo roto).
  */
-export const buildBlock = (form: BlockFormData, missions: Mission[]): Block => {
+export const buildBlock = (
+  form: BlockFormData,
+  missions: Mission[],
+  steps: MissionStep[],
+): Block => {
   const mission = missions.find((m) => m.id === form.missionId);
   if (!mission || !form.typeId) {
     throw new Error('Formulario incompleto: falta misión o tipo de bloqueo.');
-  }
-  if (form.typeId === 'pasos') {
-    throw new Error('El bloqueo por pasos todavía no está soportado.');
   }
 
   const block: Block = {
@@ -172,10 +210,16 @@ export const buildBlock = (form: BlockFormData, missions: Mission[]): Block => {
     if (!form.startTime || !form.endTime) throw new Error('Faltan las horas del bloqueo regular.');
     block.startTime = toHHmm(form.startTime);
     block.endTime = toHHmm(form.endTime);
-  } else {
+  } else if (form.typeId === 'uso') {
     const minutes = parseUsageMinutes(form.usageValue, form.usageUnit);
     if (minutes === null) throw new Error('Tiempo de uso inválido.');
     block.usageMinutes = minutes;
+  } else {
+    // 'pasos': guardamos el id y una copia del título del paso.
+    const step = steps.find((x) => x.id === form.stepId);
+    if (!step) throw new Error('Falta elegir un paso válido.');
+    block.stepId = step.id;
+    block.stepTitle = step.title;
   }
 
   return block;
@@ -196,5 +240,6 @@ export const formatMinutes = (total: number): string => {
 export const blockSummary = (b: Block): string => {
   if (b.type === 'regular' && b.startTime && b.endTime) return `${b.startTime} - ${b.endTime}`;
   if (b.type === 'uso' && b.usageMinutes) return `Tras ${formatMinutes(b.usageMinutes)}`;
+  if (b.type === 'pasos' && b.stepTitle) return b.stepTitle;
   return '—';
 };

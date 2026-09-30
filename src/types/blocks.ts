@@ -18,6 +18,19 @@ export interface Mission {
   date?: string;
 }
 
+/** Estado de un paso en el lienzo (mismos valores que ChunkStatus de ChunkNode). */
+export type StepStatus = 'avanzando' | 'completado' | 'no_iniciado';
+
+/**
+ * Paso de una misión: cada "chunk" que el usuario crea en el lienzo infinito
+ * (Infinity_canvas) de esa misión.
+ */
+export interface MissionStep {
+  id: string;
+  title: string;
+  status: StepStatus;
+}
+
 /** Aplicación instalada que el usuario eligió bloquear. */
 export interface BlockedApp {
   /** Identificador único en Android, ej. "com.whatsapp". */
@@ -44,6 +57,10 @@ export interface Block {
   endTime?: string;
   /** Solo bloqueo por uso. Siempre en minutos, sin importar la unidad elegida. */
   usageMinutes?: number;
+  /** Solo bloqueo por pasos: paso que hay que terminar para desbloquear. */
+  stepId?: string;
+  /** Copia del título del paso al crear el bloqueo (por si luego se edita o borra). */
+  stepTitle?: string;
   apps: BlockedApp[];
   /** Dominios normalizados, ej. "instagram.com". */
   websites: string[];
@@ -66,6 +83,8 @@ export interface BlockFormData {
   /** Texto tal cual lo escribió el usuario (solo dígitos). */
   usageValue: string;
   usageUnit: UsageUnit;
+  /** Id del paso elegido (solo bloqueo por pasos). */
+  stepId: string | null;
   apps: BlockedApp[];
   /** Una entrada por campo de página web (puede haber vacías). */
   websites: string[];
