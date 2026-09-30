@@ -407,9 +407,14 @@ const handleChangeChunkStatus = (
     <View style={styles.viewport}>
 
       {/* CAPA DE GESTOS */}
-      <CanvasGestureLayer
-        pan={pan}
-      />
+<CanvasGestureLayer
+  pan={pan}
+  zoom={zoom}
+  minZoom={MIN_ZOOM}
+  maxZoom={MAX_ZOOM}
+  worldLeft={-2500}
+  worldTop={-2500}
+/>
 
       {/* WORLD */}
       <Animated.View
@@ -417,17 +422,17 @@ const handleChangeChunkStatus = (
         style={[
           styles.world,
           {
-            transform: [
-              {
-                translateX: pan.x,
-              },
-              {
-                translateY: pan.y,
-              },
-              {
-                scale: zoom,
-              },
-            ],
+transform: [
+  {
+    scale: zoom,
+  },
+  {
+    translateX: pan.x,
+  },
+  {
+    translateY: pan.y,
+  },
+],
           },
         ]}
       >
