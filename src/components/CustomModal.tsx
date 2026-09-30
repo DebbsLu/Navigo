@@ -6,9 +6,9 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  Platform,
 } from 'react-native';
-import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import BtnClose from '../components/BtnClose';
 
 interface CustomModalProps {
   visible: boolean;
@@ -30,11 +30,10 @@ const CustomModal: React.FC<CustomModalProps> = ({
 
   if (!visible) return null;
 
-  const handleDateChange = (event: DateTimePickerEvent, date?: Date) => {
-    setShowDatePicker(Platform.OS === 'ios'); // En iOS se mantiene abierto, en Android se cierra solo
+  const handleValueChange = (event: any, date?: Date) => {
+    setShowDatePicker(false);
     if (date) {
       setSelectedDate(date);
-      // Formato legible: DD/MM/YYYY
       const formatted = date.toLocaleDateString('es-ES', {
         day: '2-digit',
         month: '2-digit',
@@ -53,30 +52,32 @@ const CustomModal: React.FC<CustomModalProps> = ({
 
   return (
     <View style={StyleSheet.absoluteFill}>
-      {/* Fondo semitransparente */}
+      {/* Fondo semitransparente al presionar fuera */}
       <TouchableWithoutFeedback onPress={onClose}>
         <View style={styles.backdrop} />
       </TouchableWithoutFeedback>
 
-      {/* Contenido del modal */}
       <View style={styles.centeredView}>
         <View style={styles.modalView}>
+          {/* Botón de cierre absoluto posicionado automáticamente arriba a la derecha */}
+          <BtnClose absolute top={16} right={16} onPress={onClose} />
+
           {children ? (
             children
           ) : (
             <>
-              <Text style={styles.title}>Nueva Tarea</Text>
-
-              {/* Input de Actividad */}
+              {/* Campo 1: Actividad */}
+              <Text style={styles.label}>Escribe la actividad que debes realizar</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Nombre de la actividad"
+                placeholder=""
                 placeholderTextColor="#7A7799"
                 value={actividad}
                 onChangeText={setActividad}
               />
 
-              {/* Campo para la Fecha (Estilizado como input, pero abre el Picker) */}
+              {/* Campo 2: Fecha */}
+              <Text style={styles.label}>Define la fecha que finaliza(*Si aplica):</Text>
               <TouchableOpacity
                 activeOpacity={0.8}
                 onPress={() => setShowDatePicker(true)}
@@ -88,18 +89,19 @@ const CustomModal: React.FC<CustomModalProps> = ({
                     fontSize: 14,
                   }}
                 >
-                  {fechaFormateada || 'Seleccionar fecha (opcional)'}
+                  {fechaFormateada || ''}
                 </Text>
               </TouchableOpacity>
 
-              {/* Picker Nativo */}
+              {/* DateTimePicker para Android */}
               {showDatePicker && (
                 <DateTimePicker
                   value={selectedDate}
                   mode="date"
-                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                  onChange={handleDateChange}
-                  minimumDate={new Date()} // Evita fechas pasadas
+                  display="default"
+                  onValueChange={handleValueChange}
+                  onDismiss={() => setShowDatePicker(false)}
+                  minimumDate={new Date()}
                 />
               )}
 
@@ -109,7 +111,7 @@ const CustomModal: React.FC<CustomModalProps> = ({
                 onPress={handleSubmit}
                 style={styles.submitButton}
               >
-                <Text style={styles.submitText}>Crear Tarea</Text>
+                <Text style={styles.submitText}>+ añadir actividad</Text>
               </TouchableOpacity>
             </>
           )}
@@ -135,38 +137,43 @@ const styles = StyleSheet.create({
   },
   modalView: {
     width: '100%',
-    backgroundColor: '#181622',
+    backgroundColor: '#13111C',
     borderRadius: 16,
     padding: 24,
+    paddingTop: 36, // Espacio superior extra para no encimar el texto con el BtnClose absoluto
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
+    position: 'relative',
   },
-  title: {
+  label: {
     color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 16,
+    fontSize: 14,
+    marginBottom: 8,
+    marginTop: 8,
   },
   input: {
-    backgroundColor: '#13111C',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    backgroundColor: '#181622',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
     color: '#FFFFFF',
-    marginBottom: 12,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.05)',
     justifyContent: 'center',
+    height: 48,
   },
   submitButton: {
     backgroundColor: '#853ACF',
     paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
     marginTop: 8,
   },
   submitText: {
     color: '#FFFFFF',
     fontWeight: 'bold',
+    fontSize: 14,
   },
 });
