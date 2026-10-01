@@ -2,6 +2,7 @@
 // Obtiene las aplicaciones instaladas en el teléfono.
 
 import { Platform } from 'react-native';
+import { requireOptionalNativeModule } from 'expo';
 
 /** App lista para mostrar en pantalla. */
 export interface InstalledAppInfo {
@@ -56,6 +57,15 @@ export const getInstalledApps = async (forceRefresh = false): Promise<InstalledA
   }
 
   try {
+    // Revisamos PRIMERO si el módulo nativo existe en esta app. En Expo Go no
+    // existe; si lo importáramos igual, Expo mostraría una pantalla roja de
+    // error en desarrollo. Con esta revisión simplemente usamos la lista de ejemplo.
+    if (!requireOptionalNativeModule('ExpoAndroidAppList')) {
+      return demo(
+        'Estás en Expo Go, que no puede leer tus apps. Se muestra una lista de ejemplo. Usa un development build para ver las reales.',
+      );
+    }
+
     // Import dinámico: si el módulo nativo no existe (Expo Go) falla AQUÍ,
     // dentro del try/catch, y no tumba toda la aplicación al arrancar.
     const mod = await import('expo-android-app-list');
