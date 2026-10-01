@@ -1,6 +1,6 @@
 // Pantalla "Bloqueos"
 // Muestra la lista de bloqueos guardados (AsyncStorage).
-import { useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -162,10 +162,21 @@ const SelectField: React.FC<{
 
 /*  Pantalla */
 const Blocks: React.FC = () => {
+  const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
     // Misión desde la que se entró a esta pantalla (si se entró desde una)
     const route = useRoute<any>();
     const initialMissionId: string | undefined = route.params?.missionId;
+
+const handleSelectTab = (index: number) => {
+  if (index === 0) {
+    navigation.navigate('Taskhome');
+  } else if (index === 1) {
+    navigation.navigate('Reminders');
+  } else if (index === 2) {
+    // Ya estamos en Bloqueos
+  }
+};
 
    /* ── Lista de bloqueos ── */
   const [blocks, setBlocks] = useState<Block[]>([]);
@@ -532,7 +543,10 @@ const Blocks: React.FC = () => {
             ))}
         </ScrollView>
 
-        <ViewBtnsMenu initialSelectIndex={2} />
+          <ViewBtnsMenu
+              initialSelectIndex={2}
+              onSelectTab={handleSelectTab}
+            />
       </View>
 
       {/* Modal: nuevo bloqueo */}
