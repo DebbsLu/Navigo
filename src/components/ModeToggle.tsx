@@ -81,29 +81,38 @@ const styles = StyleSheet.create({
     height: CONTAINER_HEIGHT,
     borderRadius: CONTAINER_HEIGHT / 2,
     padding: PADDING,
+
     flexDirection: 'row',
     alignItems: 'center',
     position: 'relative',
   },
+
   selectionIndicator: {
     position: 'absolute',
     left: PADDING,
+
     width: TOGGLE_WIDTH,
     height: CONTAINER_HEIGHT - PADDING * 2,
+
     borderRadius: (CONTAINER_HEIGHT - PADDING * 2) / 2,
-    borderWidth: 2,
+
+    borderWidth: 1.5,
     borderColor: '#FFFFFF',
   },
+
   optionButton: {
     flex: 1,
     height: '100%',
+
     justifyContent: 'center',
     alignItems: 'center',
+
     zIndex: 1,
   },
+
   optionText: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '500',
   },
 });

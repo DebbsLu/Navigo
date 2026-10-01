@@ -9,6 +9,7 @@ import {
   StyleSheet,
   Text,
   Animated,
+  TouchableOpacity,
 } from 'react-native';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -16,7 +17,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   useRoute,
   RouteProp,
+    useNavigation,
 } from '@react-navigation/native';
+
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import TexturedScreen from '../components/TexturedScreen';
 import CanvasMenu from '../components/CanvasMenu';
@@ -60,6 +64,10 @@ type RootStackParamList = {
     taskId: string;
     title: string;
   };
+    Reminders: {
+    taskId: string;
+    title: string;
+  };
 };
 
 type InfinityCanvasRouteProp =
@@ -68,7 +76,8 @@ type InfinityCanvasRouteProp =
     'InfinityCanvas'
   >;
   
-
+type InfinityCanvasNavigationProp =
+  NativeStackNavigationProp<RootStackParamList, 'InfinityCanvas'>;
 // =======================================================
 // STORAGE
 // =======================================================
@@ -243,6 +252,8 @@ const InfinityCanvas: React.FC =
     const route =
       useRoute<InfinityCanvasRouteProp>();
 
+  const navigation = useNavigation<InfinityCanvasNavigationProp>();
+
     const {
       taskId,
       title,
@@ -362,6 +373,11 @@ const handleModeChange = (
     ] = useState<string | null>(
       null
     );
+
+    const [ 
+  selectedConnectionId, 
+  setSelectedConnectionId, 
+] = useState<string | null>(null);
 
     // ===================================================
     // CONEXIONES
@@ -538,6 +554,15 @@ useEffect(() => {
 
         return;
       }
+
+      if (option === 'Definir recordatorio') {
+          navigation.navigate('Reminders', {
+            taskId,
+            title,
+          });
+          return;
+        }
+      
     };
 
     const handleSaveAudio = (
@@ -1257,6 +1282,19 @@ const handleChangeSolutionStatus = (
       );
     };
 
+    const handleRemoveConnection = (
+      connectionId: string
+    ) => {
+      setConnections(prev =>
+        prev.filter(
+          connection =>
+            connection.id !== connectionId
+        )
+      );
+
+      setSelectedConnectionId(null);
+    };
+
     // ===================================================
     // CONEXIONES
     // ===================================================
@@ -1517,6 +1555,8 @@ const handleChangeSolutionStatus = (
           null
         );
 
+        setSelectedConnectionId(null);
+
         if (
           pendingConnection !==
           null
@@ -1605,83 +1645,62 @@ const handleChangeSolutionStatus = (
     // RENDER CONEXIÓN
     // ===================================================
 
-    const renderConnection = (
-      connection: CanvasConnection
-    ) => {
+const renderConnection = (
+  connection: CanvasConnection
+) => {
 
-      const fromNode =
-        getNodeById(
-          connection.fromNodeId
-        );
+  const fromNode =
+    getNodeById(connection.fromNodeId);
 
-      const toNode =
-        getNodeById(
-          connection.toNodeId
-        );
+  const toNode =
+    getNodeById(connection.toNodeId);
 
-      if (
-        !fromNode ||
-        !toNode
-      ) {
+  if (!fromNode || !toNode) {
+    return null;
+  }
 
-        return null;
-      }
+  const start =
+    getConnectionPointPosition(
+      fromNode.node,
+      connection.fromSide
+    );
 
-      const start =
-        getConnectionPointPosition(
-          fromNode.node,
-          connection.fromSide
-        );
+  const end =
+    getConnectionPointPosition(
+      toNode.node,
+      connection.toSide
+    );
 
-      const end =
-        getConnectionPointPosition(
-          toNode.node,
-          connection.toSide
-        );
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
 
-      const dx =
-        end.x - start.x;
+  const length =
+    Math.sqrt(dx * dx + dy * dy);
 
-      const dy =
-        end.y - start.y;
+  const angle =
+    Math.atan2(dy, dx) *
+    (180 / Math.PI);
 
-      const length =
-        Math.sqrt(
-          dx * dx +
-          dy * dy
-        );
-
-      const angle =
-        Math.atan2(
-          dy,
-          dx
-        ) *
-        (180 / Math.PI);
-
-      return (
-        <View
-          key={connection.id}
-          pointerEvents="none"
-          style={[
-            styles.connectionLine,
+  return (
+    <View
+      key={connection.id}
+      pointerEvents="none"
+      style={[
+        styles.connectionLine,
+        {
+          left: start.x,
+          top: start.y,
+          width: length,
+          transform: [
             {
-              left: start.x,
-
-              top: start.y,
-
-              width: length,
-
-              transform: [
-                {
-                  rotate:
-                    `${angle}deg`,
-                },
-              ],
+              rotate: `${angle}deg`,
             },
-          ]}
-        />
-      );
-    };
+          ],
+        },
+      ]}
+    />
+  );
+};
 
     // ===================================================
     // LOAD COMPLETO
@@ -2729,6 +2748,35 @@ const styles =
 
       zIndex: 100,
     },
+
+    connectionLineTouchable: {
+  position: 'absolute',
+  height: 20,
+  justifyContent: 'center',
+},
+
+selectedConnectionLine: {
+  height: 5,
+  backgroundColor: '#853ACF',
+},
+
+deleteConnectionButton: {
+  position: 'absolute',
+  width: 30,
+  height: 30,
+  borderRadius: 15,
+  backgroundColor: '#2A2535',
+  borderWidth: 1,
+  borderColor: '#853ACF',
+  alignItems: 'center',
+  justifyContent: 'center',
+},
+
+deleteConnectionText: {
+  color: '#FFFFFF',
+  fontSize: 20,
+  fontWeight: 'bold',
+},
 
     // ===================================================
     // MENÚ FLOTANTE

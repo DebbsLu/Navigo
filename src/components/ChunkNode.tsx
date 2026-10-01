@@ -95,6 +95,7 @@ interface ChunkNodeProps {
 // =======================================================
 
 const DOT_SIZE = 14;
+const DOT_TOUCH_SIZE = 40;
 
 
 // =======================================================
@@ -465,100 +466,144 @@ const ChunkNode: React.FC<
         {/* CONEXIÓN SUPERIOR */}
         {/* ============================================= */}
 
-        <TouchableOpacity
-          activeOpacity={0.8}
-          onPress={() =>
-            onConnectPointPress?.(
-              'top'
-            )
-          }
-          style={[
-            styles.connectionDot,
-            styles.dotTop,
-
-            {
-              backgroundColor:
-                connections.top
-                  ? '#9793C7'
-                  : 'rgba(151, 147, 199, 0.10)',
-            },
-          ]}
-        />
+ 
 
 
         {/* ============================================= */}
         {/* CONEXIÓN INFERIOR */}
         {/* ============================================= */}
 
-        <TouchableOpacity
-          activeOpacity={0.8}
-          onPress={() =>
-            onConnectPointPress?.(
-              'bottom'
-            )
-          }
-          style={[
-            styles.connectionDot,
-            styles.dotBottom,
 
-            {
-              backgroundColor:
-                connections.bottom
-                  ? '#9793C7'
-                  : 'rgba(151, 147, 199, 0.10)',
-            },
-          ]}
-        />
 
 
         {/* ============================================= */}
         {/* CONEXIÓN IZQUIERDA */}
         {/* ============================================= */}
 
-        <TouchableOpacity
-          activeOpacity={0.8}
-          onPress={() =>
-            onConnectPointPress?.(
-              'left'
-            )
-          }
-          style={[
-            styles.connectionDot,
-            styles.dotLeft,
-
-            {
-              backgroundColor:
-                connections.left
-                  ? '#9793C7'
-                  : 'rgba(151, 147, 199, 0.10)',
-            },
-          ]}
-        />
 
 
         {/* ============================================= */}
         {/* CONEXIÓN DERECHA */}
         {/* ============================================= */}
+{/* ============================================= */}
+{/* CONEXIÓN SUPERIOR */}
+{/* ============================================= */}
 
-        <TouchableOpacity
-          activeOpacity={0.8}
-          onPress={() =>
-            onConnectPointPress?.(
-              'right'
-            )
-          }
-          style={[
-            styles.connectionDot,
-            styles.dotRight,
+<TouchableOpacity
+  activeOpacity={0.8}
+  onPress={() =>
+    onConnectPointPress?.(
+      'top'
+    )
+  }
+  style={[
+    styles.connectionTouchArea,
+    styles.touchTop,
+  ]}
+>
+  <View
+    style={[
+      styles.connectionDot,
+      {
+        backgroundColor:
+          connections.top
+            ? '#9793C7'
+            : 'rgba(151, 147, 199, 0.10)',
+      },
+    ]}
+  />
+</TouchableOpacity>
 
-            {
-              backgroundColor:
-                connections.right
-                  ? '#9793C7'
-                  : 'rgba(151, 147, 199, 0.10)',
-            },
-          ]}
-        />
+
+{/* ============================================= */}
+{/* CONEXIÓN INFERIOR */}
+{/* ============================================= */}
+
+<TouchableOpacity
+  activeOpacity={0.8}
+  onPress={() =>
+    onConnectPointPress?.(
+      'bottom'
+    )
+  }
+  style={[
+    styles.connectionTouchArea,
+    styles.touchBottom,
+  ]}
+>
+  <View
+    style={[
+      styles.connectionDot,
+      {
+        backgroundColor:
+          connections.bottom
+            ? '#9793C7'
+            : 'rgba(151, 147, 199, 0.10)',
+      },
+    ]}
+  />
+</TouchableOpacity>
+
+
+{/* ============================================= */}
+{/* CONEXIÓN IZQUIERDA */}
+{/* ============================================= */}
+
+<TouchableOpacity
+  activeOpacity={0.8}
+  onPress={() =>
+    onConnectPointPress?.(
+      'left'
+    )
+  }
+  style={[
+    styles.connectionTouchArea,
+    styles.touchLeft,
+  ]}
+>
+  <View
+    style={[
+      styles.connectionDot,
+      {
+        backgroundColor:
+          connections.left
+            ? '#9793C7'
+            : 'rgba(151, 147, 199, 0.10)',
+      },
+    ]}
+  />
+</TouchableOpacity>
+
+
+{/* ============================================= */}
+{/* CONEXIÓN DERECHA */}
+{/* ============================================= */}
+
+<TouchableOpacity
+  activeOpacity={0.8}
+  onPress={() =>
+    onConnectPointPress?.(
+      'right'
+    )
+  }
+  style={[
+    styles.connectionTouchArea,
+    styles.touchRight,
+  ]}
+>
+  <View
+    style={[
+      styles.connectionDot,
+      {
+        backgroundColor:
+          connections.right
+            ? '#9793C7'
+            : 'rgba(151, 147, 199, 0.10)',
+      },
+    ]}
+  />
+</TouchableOpacity>
+
 
       </View>
 
@@ -730,6 +775,15 @@ const styles =
       zIndex: 10,
     },
 
+connectionTouchArea: {
+  width: DOT_TOUCH_SIZE,
+  height: DOT_TOUCH_SIZE,
+  position: 'absolute',
+  zIndex: 20,
+
+  alignItems: 'center',
+  justifyContent: 'center',
+},
 
     dotTop: {
       top:
@@ -795,5 +849,43 @@ const styles =
         },
       ],
     },
+touchTop: {
+  top: -DOT_TOUCH_SIZE / 2,
+  left: '50%',
+  transform: [
+    {
+      translateX: -(DOT_TOUCH_SIZE / 2),
+    },
+  ],
+},
 
+touchBottom: {
+  bottom: -DOT_TOUCH_SIZE / 2,
+  left: '50%',
+  transform: [
+    {
+      translateX: -(DOT_TOUCH_SIZE / 2),
+    },
+  ],
+},
+
+touchLeft: {
+  left: -DOT_TOUCH_SIZE / 2,
+  top: '50%',
+  transform: [
+    {
+      translateY: -(DOT_TOUCH_SIZE / 2),
+    },
+  ],
+},
+
+touchRight: {
+  right: -DOT_TOUCH_SIZE / 2,
+  top: '50%',
+  transform: [
+    {
+      translateY: -(DOT_TOUCH_SIZE / 2),
+    },
+  ],
+},
   });

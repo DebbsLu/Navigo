@@ -63,26 +63,33 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: 'rgba(24, 22, 34, 0.75)', // Fondo del contenedor principal
-    borderColor: '#1E1D29',     // Borde del contenedor principal
+    justifyContent: 'center',
+
+    backgroundColor: '#13111C',
+    borderColor: '#1E1D29',
     borderWidth: 1.5,
-    borderRadius: 24,          // Bordes muy redondeados como en la imagen
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    width: 'auto',
+
+    borderRadius: 20,
+
+    padding: 7,
+    gap: 8,
+
     alignSelf: 'center',
   },
+
   button: {
-    width: 52,
-    height: 52,
-    backgroundColor: '#181622', // Fondo de cada botón
+    width: 60,
+    height: 60,
+
+    backgroundColor: '#181622',
+
     borderWidth: 1.5,
-    borderRadius: 14,          // Esquinas redondeadas internas
+    borderRadius: 17,
+
     alignItems: 'center',
     justifyContent: 'center',
-    marginHorizontal: 20,
   },
 });
+
 
 export default ViewBtnsMenu;
