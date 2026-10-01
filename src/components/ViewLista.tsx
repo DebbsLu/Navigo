@@ -8,6 +8,7 @@ interface ViewListaProps {
   isFirst?: boolean;            // Indica si es el primer elemento de la lista
   borderColor?: string;         // Color del borde (por defecto #9A96CC)
   title2Color?: string;         // Color del Texto 2 (por defecto #C694EB)
+  btnBackgroundColor?: string;  // Color de fondo del botón circular (opcional)
   onPressButton?: () => void;   // Evento al presionar el botón circular
   onPressItem?: () => void;     // Evento al presionar toda la tarjeta (opcional)
 }
@@ -18,12 +19,11 @@ const ViewLista: React.FC<ViewListaProps> = ({
   isFirst = false,
   borderColor = '#9A96CC',
   title2Color = '#C694EB',
+  btnBackgroundColor,
   onPressButton,
   onPressItem,
 }) => {
-  // Manejo del color de fondo según la especificación:
-  // Si es el primero: #1E1D29 al 30% de opacidad ('rgba(30, 29, 41, 0.3)')
-  // Para los demás: transparente ('transparent')
+  // Si es el primero: #1E1D29 al 30% de opacidad. Para los demás: transparente
   const backgroundColor = isFirst ? 'rgba(30, 29, 41, 0.3)' : 'transparent';
 
   return (
@@ -49,9 +49,12 @@ const ViewLista: React.FC<ViewListaProps> = ({
         <Text numberOfLines={1} style={[styles.text2, { color: title2Color }]}>
           {title2}
         </Text>
-        
+
         {/* Componente del botón circular */}
-        <BtnCircleSmall onPress={onPressButton} />
+        <BtnCircleSmall
+          onPress={onPressButton}
+          {...(btnBackgroundColor ? { backgroundColor: btnBackgroundColor } : {})}
+        />
       </View>
     </TouchableOpacity>
   );
