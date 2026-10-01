@@ -17,22 +17,27 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.Navigo"
+      "package": "com.anonymous.Navigo",
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
       "expo-font",
-      
       "expo-audio",
-    
       "@react-native-community/datetimepicker"
     ],
     "extra": {
       "eas": {
-        "projectId": "ff84f3cb-2193-4b0d-a6a6-1d70578dd03a"
+        "projectId": "4bbcb1c6-5dde-4ac7-a789-39a27541e903"
       }
-    }
+    },
+    "owner": "lm230503"
   }
 }
