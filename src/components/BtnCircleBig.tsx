@@ -1,13 +1,18 @@
-import React from 'react';
-import { TouchableOpacity, StyleSheet, Text, View } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import React from "react";
+import { TouchableOpacity, StyleSheet, Text, View } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 
 interface BtnCircleBigProps {
   onPress: () => void;
   size?: number;
+  accentRgb?: string; // Color de acento en formato "R, G, B" (por defecto morado)
 }
 
-const BtnCircleBig: React.FC<BtnCircleBigProps> = ({ onPress, size = 120 }) => {
+const BtnCircleBig: React.FC<BtnCircleBigProps> = ({
+  onPress,
+  size = 120,
+  accentRgb = "133, 58, 207",
+}) => {
   const borderRadius = size / 2;
   const borderWidth = 1.5;
 
@@ -17,12 +22,21 @@ const BtnCircleBig: React.FC<BtnCircleBigProps> = ({ onPress, size = 120 }) => {
       onPress={onPress}
       style={[
         styles.shadowContainer,
-        { width: size, height: size, borderRadius },
+        {
+          width: size,
+          height: size,
+          borderRadius,
+          shadowColor: `rgb(${accentRgb})`,
+        },
       ]}
     >
       {/* 1. Degradado para el borde (Simula el bisel brillante superior) */}
       <LinearGradient
-        colors={['rgba(255, 255, 255, 0.7)', 'rgba(133, 58, 207, 0.3)', 'rgba(255, 255, 255, 0.1)']}
+        colors={[
+          "rgba(255, 255, 255, 0.7)",
+          `rgba(${accentRgb}, 0.3)`,
+          "rgba(255, 255, 255, 0.1)",
+        ]}
         start={{ x: 0.1, y: 0.1 }}
         end={{ x: 0.9, y: 0.9 }}
         style={[styles.gradientBorder, { borderRadius }]}
@@ -34,6 +48,7 @@ const BtnCircleBig: React.FC<BtnCircleBigProps> = ({ onPress, size = 120 }) => {
             {
               borderRadius: borderRadius - borderWidth,
               margin: borderWidth,
+              backgroundColor: `rgba(${accentRgb}, 0.40)`,
             },
           ]}
         >
@@ -48,8 +63,6 @@ export default BtnCircleBig;
 
 const styles = StyleSheet.create({
   shadowContainer: {
-    // Glow/Sombra exterior violeta
-    shadowColor: '#853ACF',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.45,
     shadowRadius: 16,
@@ -61,15 +74,13 @@ const styles = StyleSheet.create({
   },
   innerContainer: {
     flex: 1,
-    // #853ACF al 20% de opacidad -> rgba(133, 58, 207, 0.20)
-    backgroundColor: 'rgba(133, 58, 207, 0.20)', 
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   icon: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 36,
-    fontWeight: '300',
+    fontWeight: "300",
     marginTop: -2, // Ajuste óptico de centrado
   },
 });
