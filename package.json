@@ -12,6 +12,7 @@
     "@reduxjs/toolkit": "^2.13.0",
     "expo": "~57.0.26",
     "expo-audio": "~57.0.5",
+    "expo-android-app-list": "^1.1.0",
     "expo-av": "^16.0.8",
     "expo-blur": "~57.0.3",
     "expo-font": "~57.0.4",

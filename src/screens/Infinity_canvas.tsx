@@ -68,6 +68,9 @@ type RootStackParamList = {
     taskId: string;
     title: string;
   };
+    Blocks: {
+    missionId: string;
+  };
 };
 
 type InfinityCanvasRouteProp =
@@ -314,6 +317,15 @@ const handleModeChange = (
   const activeHelp = activeHelpNotification
     ? HELP_NOTIFICATIONS[activeHelpNotification]
     : null;
+    // Navegación hacia otras pantallas
+    
+
+    // Abre Blocks mandando la misión actual (taskId) para que
+    // "Selecciona la misión" venga preseleccionada
+    const handleOpenBlocks = () => {
+      navigation.navigate('Blocks', { missionId: taskId });
+    };
+
 
     // ===================================================
     // CHUNKS
@@ -2536,6 +2548,8 @@ const renderConnection = (
               onSelectOption={
                 handleFloatingMenuOption
               }
+
+              
             />
 
           </View>
