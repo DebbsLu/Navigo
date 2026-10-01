@@ -170,7 +170,7 @@ const Blocks: React.FC = () => {
 
 const handleSelectTab = (index: number) => {
   if (index === 0) {
-    navigation.navigate('Taskhome');
+    navigation.navigate('Task_home');
   } else if (index === 1) {
     navigation.navigate('Reminders');
   } else if (index === 2) {
