@@ -23,6 +23,8 @@ import CanvasMenu from '../components/CanvasMenu';
 import CanvasGestureLayer from '../components/CanvasGestureLayer';
 import FloatingMenu from '../components/FloatingMenu';
 import ModalProblemas from '../components/modal_problemas';
+import AudioNode from '../components/AudioNode';
+import ModalGrabarAudio from '../components/ModalGrabarAudio';
 
 import ChunkNode, {
   ChunkStatus,
@@ -30,12 +32,24 @@ import ChunkNode, {
 } from '../components/ChunkNode';
 
 import ProblemNode from '../components/ChunkProblem';
-import SolutionNode from '../components/SolutionNode';
+//import SolutionNode from '../components/SolutionNode';
+import SolutionNode, {
+  SolutionStatus,
+} from '../components/SolutionNode';
+
+import {ModeToggle} from '../components/ModeToggle';
 
 import {
   ProblemType,
   ProblemSolution,
 } from '../data/ProblemData';
+
+import {
+  HELP_NOTIFICATIONS,
+  HelpNotificationId,
+} from '../data/helpNotificationsData';
+
+import InfoCard from '../components/InfoCard';
 
 // =======================================================
 // NAVEGACIÓN
@@ -53,6 +67,7 @@ type InfinityCanvasRouteProp =
     RootStackParamList,
     'InfinityCanvas'
   >;
+  
 
 // =======================================================
 // STORAGE
@@ -77,6 +92,8 @@ const GET_CONNECTIONS_KEY = (
   taskId: string
 ) =>
   `@canvas_connections_${taskId}`;
+
+;
 
 // =======================================================
 // DATOS DE POSICIÓN
@@ -145,8 +162,17 @@ interface SolutionNodeData {
 
   description: string;
 
+   status?: SolutionStatus;
+
   position: NodePosition;
 
+  connections: NodeConnections;
+}
+
+interface AudioNodeData {
+  id: string;
+  uri: string;
+  position: NodePosition;
   connections: NodeConnections;
 }
 
@@ -223,6 +249,62 @@ const InfinityCanvas: React.FC =
     } = route.params;
 
     // ===================================================
+    // MODO DEL CANVAS
+    // ===================================================
+  const AUDIO_STORAGE_KEY =
+  `@canvas_audio_${taskId}`
+
+  const [showAudioModal, setShowAudioModal] =
+  useState(false);
+
+    const [mode, setMode] = useState<
+      'planeacion' | 'ejecucion'
+    >('planeacion');
+
+const handleModeChange = (
+  newMode: 'planeacion' | 'ejecucion'
+) => {
+  if (newMode === mode) return;
+
+  setMode(newMode);
+
+  if (
+    mode === 'planeacion' &&
+    newMode === 'ejecucion'
+  ) {
+    showHelpNotification('entrar_ejecucion');
+  }
+
+  if (
+    mode === 'ejecucion' &&
+    newMode === 'planeacion'
+  ) {
+    showHelpNotification('volver_planeacion');
+  }
+};
+
+    const [activeHelpNotification, setActiveHelpNotification] =
+    useState<HelpNotificationId | null>(null);
+
+  const hasShownEmptyCanvasHelp = useRef(false);
+
+    const showHelpNotification = (
+      notificationId: HelpNotificationId
+    ) => {
+      setActiveHelpNotification(notificationId);
+    };
+
+    const closeHelpNotification = () => {
+      setActiveHelpNotification(null);
+    };
+
+
+  // AQUÍ VA activeHelp
+  const activeHelp = activeHelpNotification
+    ? HELP_NOTIFICATIONS[activeHelpNotification]
+    : null;
+
+    // ===================================================
     // CHUNKS
     // ===================================================
 
@@ -230,6 +312,9 @@ const InfinityCanvas: React.FC =
       chunks,
       setChunks,
     ] = useState<ChunkData[]>([]);
+
+    const [audioNodes, setAudioNodes] =
+  useState<AudioNodeData[]>([]);
 
     // ===================================================
     // PROBLEMAS
@@ -332,6 +417,43 @@ const InfinityCanvas: React.FC =
       loadCanvas();
     }, [taskId]);
 
+    
+useEffect(() => {
+  if (!isLoaded) return;
+
+  const isCanvasEmpty =
+    chunks.length === 0 &&
+    problemNodes.length === 0 &&
+    solutionNodes.length === 0;
+
+  if (
+    isCanvasEmpty &&
+    !hasShownEmptyCanvasHelp.current
+  ) {
+    hasShownEmptyCanvasHelp.current = true;
+
+    showHelpNotification(
+      'canvas_vacio_descomponer'
+    );
+  }
+}, [
+  isLoaded,
+  chunks.length,
+  problemNodes.length,
+  solutionNodes.length,
+]);
+
+useEffect(() => {
+  if (!isLoaded) return;
+
+  AsyncStorage.setItem(
+    AUDIO_STORAGE_KEY,
+    JSON.stringify(audioNodes)
+  );
+}, [
+  audioNodes,
+  isLoaded,
+]);
     // ===================================================
     // GUARDAR CHUNKS
     // ===================================================
@@ -403,8 +525,50 @@ const InfinityCanvas: React.FC =
         'Algo te detiene: Problemas, Dist...'
       ) {
         setShowProblemsModal(true);
+
+        return;
+      }
+
+
+      if (
+        option ===
+        'Grabar audio para expresarse'
+      ) {
+        setShowAudioModal(true);
+
+        return;
       }
     };
+
+    const handleSaveAudio = (
+  uri: string
+) => {
+
+  const audioId =
+    `audio-${Date.now()}`;
+
+  const audioPosition = {
+    x: WORLD_CENTER - NODE_WIDTH / 2,
+    y: WORLD_CENTER - NODE_HEIGHT / 2,
+  };
+
+    const newAudio: AudioNodeData = {
+      id: audioId,
+
+      uri,
+
+      position: audioPosition,
+
+      connections: {},
+    };
+
+    setAudioNodes(prev => [
+      ...prev,
+      newAudio,
+    ]);
+
+    setShowAudioModal(false);
+  };
 
     // ===================================================
     // CREAR PROBLEMA + SOLUCIÓN
@@ -478,6 +642,8 @@ const InfinityCanvas: React.FC =
 
         description:
           solutionDescription,
+
+        status: 'no_iniciado',
 
         position:
           solutionPosition,
@@ -580,6 +746,22 @@ const InfinityCanvas: React.FC =
         'Solución personalizada por el usuario.'
       );
     };
+
+const handleChangeSolutionStatus = (
+  id: string,
+  newStatus: SolutionStatus
+) => {
+  setSolutionNodes(prev =>
+    prev.map(node =>
+      node.id === id
+        ? {
+            ...node,
+            status: newStatus,
+          }
+        : node
+    )
+  );
+};
 
     // ===================================================
     // CREAR CHUNK
@@ -771,6 +953,38 @@ const InfinityCanvas: React.FC =
     // ===================================================
     // MOVER CHUNK
     // ===================================================
+    const handleMoveAudio = (
+  id: string,
+  startX: number,
+  startY: number,
+  dx: number,
+  dy: number
+) => {
+
+  const currentZoom =
+    (zoom as any).__getValue();
+
+  const worldDx =
+    dx / currentZoom;
+
+  const worldDy =
+    dy / currentZoom;
+
+  setAudioNodes(prev =>
+    prev.map(node =>
+      node.id === id
+        ? {
+            ...node,
+            position: {
+              x: startX + worldDx,
+              y: startY + worldDy,
+            },
+          }
+        : node
+    )
+  );
+};
+
 
     const handleMoveChunk = (
       id: string,
@@ -923,6 +1137,18 @@ const InfinityCanvas: React.FC =
         };
       }
 
+      const audio =
+        audioNodes.find(
+          node => node.id === id
+        );
+
+      if (audio) {
+        return {
+          type: 'audio' as const,
+          node: audio,
+        };
+      }
+
       const problem =
         problemNodes.find(
           node => node.id === id
@@ -995,6 +1221,20 @@ const InfinityCanvas: React.FC =
                   }
                 : node
           )
+      );
+
+      setAudioNodes(prev =>
+        prev.map(node =>
+          node.id === nodeId
+            ? {
+                ...node,
+                connections: {
+                  ...node.connections,
+                  [side]: true,
+                },
+              }
+            : node
+        )
       );
 
       setSolutionNodes(
@@ -1206,6 +1446,10 @@ const InfinityCanvas: React.FC =
           prev.filter(
             node => node.id !== id
           )
+      );
+
+      setAudioNodes(prev =>
+        prev.filter(node => node.id !== id)
       );
 
       // -----------------------------------------------
@@ -1451,6 +1695,18 @@ const InfinityCanvas: React.FC =
           // ---------------------------------------------
           // CHUNKS
           // ---------------------------------------------
+          const storedAudios =
+            await AsyncStorage.getItem(
+              AUDIO_STORAGE_KEY
+            );
+
+          if (storedAudios) {
+            setAudioNodes(
+              JSON.parse(storedAudios)
+            );
+          } else {
+            setAudioNodes([]);
+          }
 
           const chunksJson =
             await AsyncStorage.getItem(
@@ -1599,6 +1855,8 @@ const InfinityCanvas: React.FC =
         }
       };
 
+
+      
     // ===================================================
     // GUARDAR CHUNKS
     // ===================================================
@@ -1740,7 +1998,22 @@ const InfinityCanvas: React.FC =
               {title}
             </Text>
 
+              <ModeToggle
+                value={mode}
+                onChange={handleModeChange}
+              />
+
           </View>
+
+
+    {/* NOTIFICACIÓN DE AYUDA */}
+    {activeHelp && (
+      <InfoCard
+        title={activeHelp.title}
+        description={activeHelp.description}
+        onClose={closeHelpNotification}
+      />
+    )}
 
           {/* ===============================================
               CANVAS
@@ -1933,6 +2206,68 @@ const InfinityCanvas: React.FC =
                 )
               )}
 
+              {audioNodes.map(
+  item => (
+    <View
+      key={item.id}
+      style={[
+        styles.nodeItemWrapper,
+        {
+          left: item.position.x,
+          top: item.position.y,
+        },
+      ]}
+    >
+
+      <AudioNode
+        uri={item.uri}
+
+        position={item.position}
+
+        selected={
+          selectedNodeId === item.id
+        }
+
+        onSelect={() =>
+          handleSelectNode(item.id)
+        }
+
+        onMove={(
+          startX,
+          startY,
+          dx,
+          dy
+        ) =>
+          handleMoveAudio(
+            item.id,
+            startX,
+            startY,
+            dx,
+            dy
+          )
+        }
+
+        connections={
+          item.connections
+        }
+
+        onClose={() =>
+          handleRemoveNode(item.id)
+        }
+
+        onConnectPointPress={
+          side =>
+            handleConnectionPointPress(
+              item.id,
+              side
+            )
+        }
+      />
+
+    </View>
+  )
+)}
+
               {/* =========================================
                   PROBLEM NODES
               ========================================= */}
@@ -2063,6 +2398,15 @@ const InfinityCanvas: React.FC =
                         item.position
                       }
 
+                       status={item.status}
+
+                        onStatusChange={newStatus =>
+                          handleChangeSolutionStatus(
+                            item.id,
+                            newStatus
+                          )
+                        }
+
                       selected={
                         selectedNodeId ===
                         item.id
@@ -2149,19 +2493,15 @@ const InfinityCanvas: React.FC =
               MENÚ INFERIOR
           ============================================= */}
 
-          <View
-            style={
-              styles.menuContainer
-            }
-          >
+{mode === 'planeacion' && (
+  <View style={styles.menuContainer}>
+    <CanvasMenu
+      onAddChunk={handleAddChunk}
+    />
+  </View>
+)}
 
-            <CanvasMenu
-              onAddChunk={
-                handleAddChunk
-              }
-            />
 
-          </View>
 
           {/* =============================================
               MENÚ FLOTANTE
@@ -2180,6 +2520,19 @@ const InfinityCanvas: React.FC =
             />
 
           </View>
+
+
+                {showAudioModal && (
+  <ModalGrabarAudio
+    visible={showAudioModal}
+
+    onClose={() =>
+      setShowAudioModal(false)
+    }
+
+    onSave={handleSaveAudio}
+  />
+)}
 
           {/* =============================================
               MODAL DE PROBLEMAS

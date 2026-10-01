@@ -48,16 +48,22 @@ export default BtnCircleBig;
 
 const styles = StyleSheet.create({
   shadowContainer: {
+
     // Glow/Sombra exterior violeta
     shadowColor: '#853ACF',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.45,
     shadowRadius: 16,
     elevation: 10,
+    width: 44,       
+    height: 44,      
+    borderRadius: 22,
+
   },
   gradientBorder: {
     flex: 1,
-    padding: 1.5, // Ancho del borde
+    borderRadius: 20,
+    padding: 1.2, // Ancho del borde
   },
   innerContainer: {
     flex: 1,
@@ -65,11 +71,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(133, 58, 207, 0.20)', 
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: 20.5,
   },
   icon: {
     color: '#FFFFFF',
-    fontSize: 36,
+    fontSize: 24,
     fontWeight: '300',
-    marginTop: -2, // Ajuste óptico de centrado
+    marginTop: -1, // Ajuste óptico de centrado
   },
+
 });

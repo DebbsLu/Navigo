@@ -63,15 +63,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     width: '100%',
-    paddingVertical: 14,
-    paddingHorizontal: 18,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
     borderRadius: 16,
     borderWidth: 1.5,
     marginVertical: 6,
   },
   text1: {
     flex: 1,
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: 'bold',
     color: '#DED1EB', // Color fijo que no cambia
     marginRight: 12,
