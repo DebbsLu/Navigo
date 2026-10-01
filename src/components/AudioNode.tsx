@@ -1,4 +1,7 @@
-// src/components/AudioNode.tsx
+
+// ------------------------------------
+// IMPORTACIONES
+// ------------------------------------
 
 import React, { useRef } from 'react';
 
@@ -17,12 +20,19 @@ import {
 
 import BtnClose from './BtnClose';
 
+// ------------------------------------
+// TIPOS
+// ------------------------------------
+
+// Define los lados disponibles para los puntos de conexión
+// del nodo de audio.
 export type ConnectionSide =
   | 'top'
   | 'bottom'
   | 'left'
   | 'right';
 
+// Indica qué puntos de conexión del nodo están activos.
 export interface ConnectionPointState {
   top?: boolean;
   bottom?: boolean;
@@ -30,18 +40,27 @@ export interface ConnectionPointState {
   right?: boolean;
 }
 
+// ------------------------------------
+// PROPIEDADES DEL COMPONENTE
+// ------------------------------------
+
 export interface AudioNodeProps {
+  // Dirección del archivo de audio.
   uri: string;
 
+  // Posición inicial del nodo dentro del canvas.
   position?: {
     x: number;
     y: number;
   };
 
+  // Indica si el nodo está seleccionado.
   selected?: boolean;
 
+  // Se ejecuta cuando el usuario selecciona el nodo.
   onSelect?: () => void;
 
+  // Se ejecuta mientras el usuario mueve el nodo.
   onMove?: (
     startX: number,
     startY: number,
@@ -49,14 +68,21 @@ export interface AudioNodeProps {
     dy: number
   ) => void;
 
+  // Estado de los puntos de conexión.
   connections?: ConnectionPointState;
 
+  // Se ejecuta cuando se presiona el botón de cerrar.
   onClose?: () => void;
 
+  // Se ejecuta cuando se presiona un punto de conexión.
   onConnectPointPress?: (
     side: ConnectionSide
   ) => void;
 }
+
+// ------------------------------------
+// COMPONENTE PRINCIPAL
+// ------------------------------------
 
 const AudioNode: React.FC<AudioNodeProps> = ({
   uri,
@@ -68,22 +94,41 @@ const AudioNode: React.FC<AudioNodeProps> = ({
   onClose,
   onConnectPointPress,
 }) => {
+
+  // ------------------------------------
+  // REPRODUCTOR DE AUDIO
+  // ------------------------------------
+
+  // Crea el reproductor utilizando la dirección
+  // del archivo de audio recibida por el componente.
   const player = useAudioPlayer(uri);
+
+  // Obtiene el estado actual del reproductor,
+  // por ejemplo, si el audio está reproduciéndose.
   const playerStatus = useAudioPlayerStatus(player);
 
-  /*
-   * Guardamos la posición inicial del nodo
-   * cuando comienza el movimiento.
-   */
+  // ------------------------------------
+  // CONTROL DEL MOVIMIENTO
+  // ------------------------------------
+
+  // Guarda la posición del nodo en el momento
+  // en que comienza el movimiento.
   const startPosition = useRef({
     x: position.x,
     y: position.y,
   });
 
+  // Configura los gestos necesarios para poder
+  // seleccionar y mover el nodo dentro del canvas.
   const panResponder = useRef(
     PanResponder.create({
+
+      // Permite que este componente responda
+      // al inicio de un gesto.
       onStartShouldSetPanResponder: () => true,
 
+      // Guarda la posición inicial cuando comienza
+      // el movimiento y selecciona el nodo.
       onPanResponderGrant: () => {
         startPosition.current = {
           x: position.x,
@@ -93,6 +138,8 @@ const AudioNode: React.FC<AudioNodeProps> = ({
         onSelect?.();
       },
 
+      // Envía al componente padre la posición inicial
+      // y el desplazamiento realizado por el usuario.
       onPanResponderMove: (_, gestureState) => {
         onMove?.(
           startPosition.current.x,
@@ -102,10 +149,17 @@ const AudioNode: React.FC<AudioNodeProps> = ({
         );
       },
 
+      // No se necesita realizar ninguna acción
+      // adicional al finalizar el movimiento.
       onPanResponderRelease: () => {},
     })
   ).current;
 
+  // ------------------------------------
+  // CONTROL DE REPRODUCCIÓN
+  // ------------------------------------
+
+  // Alterna entre reproducir y pausar el audio.
   const handlePlayPause = () => {
     if (playerStatus.playing) {
       player.pause();
@@ -113,6 +167,10 @@ const AudioNode: React.FC<AudioNodeProps> = ({
       player.play();
     }
   };
+
+  // ------------------------------------
+  // RENDERIZADO
+  // ------------------------------------
 
   return (
     <View
@@ -122,13 +180,17 @@ const AudioNode: React.FC<AudioNodeProps> = ({
       ]}
       {...panResponder.panHandlers}
     >
-      {/* HEADER */}
+
+      {/* ------------------------------------
+          ENCABEZADO
+          ------------------------------------ */}
 
       <View style={styles.header}>
         <Text style={styles.title}>
           Audio
         </Text>
 
+        {/* Botón para cerrar/eliminar el nodo */}
         {onClose && (
           <BtnClose
             onPress={onClose}
@@ -141,9 +203,13 @@ const AudioNode: React.FC<AudioNodeProps> = ({
         )}
       </View>
 
-      {/* REPRODUCTOR */}
+      {/* ------------------------------------
+          REPRODUCTOR DE AUDIO
+          ------------------------------------ */}
 
       <View style={styles.playerContainer}>
+
+        {/* Botón para reproducir o pausar */}
         <TouchableOpacity
           style={styles.playButton}
           onPress={handlePlayPause}
@@ -154,26 +220,33 @@ const AudioNode: React.FC<AudioNodeProps> = ({
           </Text>
         </TouchableOpacity>
 
+        {/* Texto que indica el estado actual del audio */}
         <Text style={styles.audioText}>
           {playerStatus.playing
             ? 'Reproduciendo...'
             : 'Reproducir audio'}
         </Text>
+
       </View>
 
-      {/* PUNTOS DE CONEXIÓN */}
+      {/* ------------------------------------
+          PUNTOS DE CONEXIÓN
+          ------------------------------------ */}
 
+      {/* Punto de conexión superior */}
       <TouchableOpacity
         style={[
           styles.connectionPoint,
           styles.topPoint,
-          connections?.top && styles.activeConnectionPoint,
+          connections?.top &&
+            styles.activeConnectionPoint,
         ]}
         onPress={() =>
           onConnectPointPress?.('top')
         }
       />
 
+      {/* Punto de conexión inferior */}
       <TouchableOpacity
         style={[
           styles.connectionPoint,
@@ -186,6 +259,7 @@ const AudioNode: React.FC<AudioNodeProps> = ({
         }
       />
 
+      {/* Punto de conexión izquierdo */}
       <TouchableOpacity
         style={[
           styles.connectionPoint,
@@ -198,6 +272,7 @@ const AudioNode: React.FC<AudioNodeProps> = ({
         }
       />
 
+      {/* Punto de conexión derecho */}
       <TouchableOpacity
         style={[
           styles.connectionPoint,
@@ -209,19 +284,24 @@ const AudioNode: React.FC<AudioNodeProps> = ({
           onConnectPointPress?.('right')
         }
       />
+
     </View>
   );
 };
 
+// ------------------------------------
+// ESTILOS
+// ------------------------------------
+
 const styles = StyleSheet.create({
+
+  // Contenedor principal del nodo.
+  //
+  // IMPORTANTE:
+  // No se utilizan left ni top aquí.
+  // InfinityCanvas se encarga de posicionar
+  // el nodo mediante nodeItemWrapper.
   container: {
-    /*
-     * IMPORTANTE:
-     * Ya NO ponemos left/top aquí.
-     *
-     * InfinityCanvas se encarga de posicionar
-     * el nodo mediante nodeItemWrapper.
-     */
     position: 'absolute',
 
     width: 280,
@@ -236,27 +316,33 @@ const styles = StyleSheet.create({
     padding: 16,
   },
 
+  // Estilo aplicado cuando el nodo está seleccionado.
   selected: {
     borderColor: '#853ACF',
   },
 
+  // Área superior donde se muestra el título
+  // y el botón para cerrar el nodo.
   header: {
     height: 30,
     justifyContent: 'center',
   },
 
+  // Texto del título del nodo.
   title: {
     color: '#DED1EB',
     fontSize: 15,
     fontWeight: 'bold',
   },
 
+  // Contenedor del reproductor.
   playerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 18,
   },
 
+  // Botón circular para reproducir o pausar.
   playButton: {
     width: 42,
     height: 42,
@@ -268,18 +354,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
+  // Símbolo mostrado dentro del botón
+  // de reproducción/pausa.
   playButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
   },
 
+  // Texto que indica el estado del audio.
   audioText: {
     color: '#808088',
     fontSize: 14,
     marginLeft: 12,
   },
 
+  // Estilo base de los puntos de conexión.
   connectionPoint: {
     position: 'absolute',
 
@@ -291,29 +381,39 @@ const styles = StyleSheet.create({
     backgroundColor: '#D0BCFF',
   },
 
+  // Color utilizado cuando un punto de conexión
+  // se encuentra activo.
   activeConnectionPoint: {
     backgroundColor: '#853ACF',
   },
 
+  // Posición del punto de conexión superior.
   topPoint: {
     top: -6,
     left: 134,
   },
 
+  // Posición del punto de conexión inferior.
   bottomPoint: {
     bottom: -6,
     left: 134,
   },
 
+  // Posición del punto de conexión izquierdo.
   leftPoint: {
     left: -6,
     top: 69,
   },
 
+  // Posición del punto de conexión derecho.
   rightPoint: {
     right: -6,
     top: 69,
   },
 });
+
+// ------------------------------------
+// EXPORTACIÓN
+// ------------------------------------
 
 export default AudioNode;

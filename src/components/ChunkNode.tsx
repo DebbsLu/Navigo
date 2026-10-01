@@ -1,6 +1,9 @@
-import React, {
-  useRef,
-} from 'react';
+
+// ------------------------------------
+// IMPORTACIONES
+// ------------------------------------
+
+import React, { useRef } from 'react';
 
 import {
   View,
@@ -13,23 +16,24 @@ import {
 
 import BtnClose from './BtnClose';
 
-
-// =======================================================
+// ------------------------------------
 // TIPOS
-// =======================================================
+// ------------------------------------
 
+// Estados posibles de un chunk.
 export type ChunkStatus =
   | 'avanzando'
   | 'completado'
   | 'no_iniciado';
 
+// Lados disponibles para los puntos de conexión.
 export type ConnectionSide =
   | 'top'
   | 'bottom'
   | 'left'
   | 'right';
 
-
+// Indica qué puntos de conexión están activos.
 interface ConnectionPointState {
   top?: boolean;
   bottom?: boolean;
@@ -37,26 +41,36 @@ interface ConnectionPointState {
   right?: boolean;
 }
 
-
+// Representa la posición del chunk dentro del canvas.
 interface ChunkPosition {
   x: number;
   y: number;
 }
 
+// ------------------------------------
+// PROPIEDADES DEL COMPONENTE
+// ------------------------------------
 
 interface ChunkNodeProps {
+  // Título principal del chunk.
   title: string;
 
+  // Descripción o detalles del chunk.
   description: string;
 
+  // Posición del chunk dentro del canvas.
   position?: ChunkPosition;
 
+  // Estado actual del chunk.
   status?: ChunkStatus;
 
+  // Indica si el chunk está seleccionado.
   selected?: boolean;
 
+  // Se ejecuta cuando el chunk es seleccionado.
   onSelect?: () => void;
 
+  // Se ejecuta mientras el chunk se está desplazando.
   onMove?: (
     startX: number,
     startY: number,
@@ -64,43 +78,53 @@ interface ChunkNodeProps {
     dy: number
   ) => void;
 
+  // Se ejecuta cuando cambia el título.
   onTitleChange?: (
     title: string
   ) => void;
 
+  // Se ejecuta cuando cambia la descripción.
   onDescriptionChange?: (
     description: string
   ) => void;
 
+  // Se ejecuta cuando cambia el estado.
   onStatusChange?: (
     status: ChunkStatus
   ) => void;
 
+  // Texto mostrado en el botón para añadir
+  // un nuevo subpaso.
   subStepButtonText?: string;
 
+  // Estado de los puntos de conexión.
   connections?: ConnectionPointState;
 
+  // Se ejecuta al cerrar/eliminar el chunk.
   onClose?: () => void;
 
+  // Se ejecuta al presionar el botón de subpaso.
   onPressSubStep?: () => void;
 
+  // Se ejecuta al presionar un punto de conexión.
   onConnectPointPress?: (
     side: ConnectionSide
   ) => void;
 }
 
-
-// =======================================================
+// ------------------------------------
 // CONSTANTES
-// =======================================================
+// ------------------------------------
 
+// Tamaño de los puntos de conexión.
 const DOT_SIZE = 14;
 
+// ------------------------------------
+// CONFIGURACIÓN DE ESTADOS
+// ------------------------------------
 
-// =======================================================
-// ESTADOS
-// =======================================================
-
+// Define el texto y color correspondiente
+// a cada estado del chunk.
 const STATUS_CONFIG: Record<
   ChunkStatus,
   {
@@ -108,7 +132,6 @@ const STATUS_CONFIG: Record<
     color: string;
   }
 > = {
-
   avanzando: {
     label: 'Avanzando',
     color: '#853ACF',
@@ -123,14 +146,14 @@ const STATUS_CONFIG: Record<
     label: 'No iniciado',
     color: '#DED1EB',
   },
-
 };
 
+// ------------------------------------
+// OBTENER SIGUIENTE ESTADO
+// ------------------------------------
 
-// =======================================================
-// SIGUIENTE ESTADO
-// =======================================================
-
+// Cambia el estado del chunk siguiendo
+// un ciclo definido.
 const getNextStatus = (
   status: ChunkStatus
 ): ChunkStatus => {
@@ -151,73 +174,59 @@ const getNextStatus = (
   }
 };
 
-
-// =======================================================
-// COMPONENTE
-// =======================================================
+// ------------------------------------
+// COMPONENTE PRINCIPAL
+// ------------------------------------
 
 const ChunkNode: React.FC<
   ChunkNodeProps
 > = ({
-
   title,
-
   description,
-
   position,
-
   status = 'no_iniciado',
-
   selected = false,
-
   onSelect,
-
   onMove,
-
   onTitleChange,
-
   onDescriptionChange,
-
   onStatusChange,
-
-  subStepButtonText =
-    '+ Añadir subpaso',
-
+  subStepButtonText = '+ Añadir subpaso',
   connections = {},
-
   onClose,
-
   onPressSubStep,
-
   onConnectPointPress,
-
 }) => {
 
+  // Obtiene la configuración visual
+  // correspondiente al estado actual.
   const currentStatus =
     STATUS_CONFIG[status];
 
+  // ------------------------------------
+  // CONTROL DEL ARRASTRE
+  // ------------------------------------
 
-  // =====================================================
-  // DRAG DEL CHUNK
-  // =====================================================
-
+  // Configura los gestos utilizados para
+  // desplazar el chunk dentro del canvas.
   const dragResponder = useRef(
-
     PanResponder.create({
 
-      // -----------------------------------------------
-      // No capturar un toque simple.
-      // -----------------------------------------------
+      // ------------------------------------
+      // TOQUE INICIAL
+      // ------------------------------------
 
+      // Un toque simple no debe activar
+      // inmediatamente el arrastre.
       onStartShouldSetPanResponder:
         () => false,
 
+      // ------------------------------------
+      // DETECTAR ARRASTRE
+      // ------------------------------------
 
-      // -----------------------------------------------
-      // Capturar solamente cuando
-      // realmente empieza a arrastrarse.
-      // -----------------------------------------------
-
+      // El movimiento debe superar cierto umbral
+      // para considerarse un arrastre.
       onMoveShouldSetPanResponder: (
         _event,
         gestureState
@@ -234,78 +243,70 @@ const ChunkNode: React.FC<
         );
       },
 
+      // ------------------------------------
+      // INICIO DEL ARRASTRE
+      // ------------------------------------
 
-      // -----------------------------------------------
-      // Inicio del arrastre
-      // -----------------------------------------------
-
+      // Selecciona el chunk cuando comienza
+      // un movimiento válido.
       onPanResponderGrant: () => {
-
         onSelect?.();
       },
 
-
-      // -----------------------------------------------
-      // Movimiento
-      // -----------------------------------------------
+      // ------------------------------------
+      // MOVIMIENTO
+      // ------------------------------------
 
       onPanResponderMove: (
         _event,
         gestureState
       ) => {
 
+        // Si el chunk no tiene posición,
+        // no se puede calcular su desplazamiento.
         if (!position) {
           return;
         }
 
+        // Envía al componente padre la posición
+        // inicial y el desplazamiento realizado.
         onMove?.(
-
           position.x,
-
           position.y,
-
           gestureState.dx,
-
           gestureState.dy
         );
       },
 
+      // ------------------------------------
+      // FIN DEL ARRASTRE
+      // ------------------------------------
 
-      // -----------------------------------------------
-      // Fin
-      // -----------------------------------------------
+      onPanResponderRelease: () => {},
 
-      onPanResponderRelease:
-        () => {},
-
-
-      onPanResponderTerminate:
-        () => {},
-
+      // Se ejecuta si React Native termina
+      // el gesto antes de finalizar normalmente.
+      onPanResponderTerminate: () => {},
     })
-
   ).current;
 
-
-  // =====================================================
-  // RENDER
-  // =====================================================
+  // ------------------------------------
+  // RENDERIZADO
+  // ------------------------------------
 
   return (
-
     <View
       style={styles.wrapper}
       onTouchStart={onSelect}
     >
 
-      {/* =============================================== */}
-      {/* ESTADO */}
-      {/* =============================================== */}
+      {/* ------------------------------------
+          ESTADO DEL CHUNK
+          ------------------------------------ */}
 
       <Text
         style={[
           styles.statusText,
-
           {
             color:
               currentStatus.color,
@@ -315,72 +316,63 @@ const ChunkNode: React.FC<
         {currentStatus.label}
       </Text>
 
-
-      {/* =============================================== */}
-      {/* TARJETA */}
-      {/* =============================================== */}
+      {/* ------------------------------------
+          TARJETA PRINCIPAL
+          ------------------------------------ */}
 
       <View
         style={[
           styles.cardContainer,
-
           selected &&
             styles.cardContainerSelected,
         ]}
       >
 
-        {/* ============================================= */}
-        {/* HEADER */}
-        {/* ============================================= */}
+        {/* ------------------------------------
+            ENCABEZADO
+            ------------------------------------ */}
 
-        <View
-          style={styles.header}
-        >
+        <View style={styles.header}>
 
-          {/* ------------------------------------------- */}
-          {/* ESTADO */}
-          {/* ------------------------------------------- */}
+          {/* ------------------------------------
+              INDICADOR DE ESTADO
+              ------------------------------------ */}
 
+          {/* Al presionar el punto se cambia
+              al siguiente estado. */}
           <TouchableOpacity
             activeOpacity={0.7}
             onPress={() =>
               onStatusChange?.(
-                getNextStatus(
-                  status
-                )
+                getNextStatus(status)
               )
             }
           >
-
             <View
               style={[
                 styles.statusDot,
-
                 {
                   backgroundColor:
                     currentStatus.color,
                 },
               ]}
             />
-
           </TouchableOpacity>
 
+          {/* ------------------------------------
+              ZONA DE ARRASTRE
+              ------------------------------------ */}
 
-          {/* ------------------------------------------- */}
-          {/* ZONA DE ARRASTRE */}
-          {/* ------------------------------------------- */}
-
+          {/* Esta zona recibe los gestos
+              utilizados para mover el chunk. */}
           <View
-            style={
-              styles.dragHandle
-            }
+            style={styles.dragHandle}
             {...dragResponder.panHandlers}
           />
 
-
-          {/* ------------------------------------------- */}
-          {/* CERRAR */}
-          {/* ------------------------------------------- */}
+          {/* ------------------------------------
+              BOTÓN DE CERRAR
+              ------------------------------------ */}
 
           <BtnClose
             onPress={() =>
@@ -390,10 +382,9 @@ const ChunkNode: React.FC<
 
         </View>
 
-
-        {/* ============================================= */}
-        {/* TÍTULO */}
-        {/* ============================================= */}
+        {/* ------------------------------------
+            TÍTULO
+            ------------------------------------ */}
 
         <TextInput
           value={title}
@@ -402,23 +393,19 @@ const ChunkNode: React.FC<
           }
           placeholder="Título del paso"
           placeholderTextColor="#777380"
-          style={
-            styles.titleInput
-          }
+          style={styles.titleInput}
           multiline
         />
 
-
-        {/* ============================================= */}
-        {/* DESCRIPCIÓN */}
-        {/* ============================================= */}
+        {/* ------------------------------------
+            DESCRIPCIÓN
+            ------------------------------------ */}
 
         <View
           style={
             styles.descriptionBox
           }
         >
-
           <TextInput
             value={description}
             onChangeText={
@@ -432,13 +419,11 @@ const ChunkNode: React.FC<
             multiline
             textAlignVertical="top"
           />
-
         </View>
 
-
-        {/* ============================================= */}
-        {/* AÑADIR SUBPASO */}
-        {/* ============================================= */}
+        {/* ------------------------------------
+            AÑADIR SUBPASO
+            ------------------------------------ */}
 
         <TouchableOpacity
           activeOpacity={0.7}
@@ -449,7 +434,6 @@ const ChunkNode: React.FC<
             onPressSubStep?.()
           }
         >
-
           <Text
             style={
               styles.subStepButtonText
@@ -457,13 +441,11 @@ const ChunkNode: React.FC<
           >
             {subStepButtonText}
           </Text>
-
         </TouchableOpacity>
 
-
-        {/* ============================================= */}
-        {/* CONEXIÓN SUPERIOR */}
-        {/* ============================================= */}
+        {/* ------------------------------------
+            PUNTO DE CONEXIÓN SUPERIOR
+            ------------------------------------ */}
 
         <TouchableOpacity
           activeOpacity={0.8}
@@ -475,7 +457,6 @@ const ChunkNode: React.FC<
           style={[
             styles.connectionDot,
             styles.dotTop,
-
             {
               backgroundColor:
                 connections.top
@@ -485,10 +466,9 @@ const ChunkNode: React.FC<
           ]}
         />
 
-
-        {/* ============================================= */}
-        {/* CONEXIÓN INFERIOR */}
-        {/* ============================================= */}
+        {/* ------------------------------------
+            PUNTO DE CONEXIÓN INFERIOR
+            ------------------------------------ */}
 
         <TouchableOpacity
           activeOpacity={0.8}
@@ -500,7 +480,6 @@ const ChunkNode: React.FC<
           style={[
             styles.connectionDot,
             styles.dotBottom,
-
             {
               backgroundColor:
                 connections.bottom
@@ -510,10 +489,9 @@ const ChunkNode: React.FC<
           ]}
         />
 
-
-        {/* ============================================= */}
-        {/* CONEXIÓN IZQUIERDA */}
-        {/* ============================================= */}
+        {/* ------------------------------------
+            PUNTO DE CONEXIÓN IZQUIERDO
+            ------------------------------------ */}
 
         <TouchableOpacity
           activeOpacity={0.8}
@@ -525,7 +503,6 @@ const ChunkNode: React.FC<
           style={[
             styles.connectionDot,
             styles.dotLeft,
-
             {
               backgroundColor:
                 connections.left
@@ -535,10 +512,9 @@ const ChunkNode: React.FC<
           ]}
         />
 
-
-        {/* ============================================= */}
-        {/* CONEXIÓN DERECHA */}
-        {/* ============================================= */}
+        {/* ------------------------------------
+            PUNTO DE CONEXIÓN DERECHO
+            ------------------------------------ */}
 
         <TouchableOpacity
           activeOpacity={0.8}
@@ -550,7 +526,6 @@ const ChunkNode: React.FC<
           style={[
             styles.connectionDot,
             styles.dotRight,
-
             {
               backgroundColor:
                 connections.right
@@ -561,239 +536,188 @@ const ChunkNode: React.FC<
         />
 
       </View>
-
     </View>
   );
 };
 
+// ------------------------------------
+// EXPORTACIÓN
+// ------------------------------------
 
 export default ChunkNode;
 
-
-// =======================================================
+// ------------------------------------
 // ESTILOS
-// =======================================================
-
-const styles =
-  StyleSheet.create({
-
-    wrapper: {
-      alignItems:
-        'flex-start',
-
-      paddingTop: 24,
-
-      paddingHorizontal: 12,
-    },
-
-
-    statusText: {
-      fontSize: 14,
-
-      fontWeight: '600',
-
-      marginBottom: 6,
-
-      marginLeft: 16,
-    },
-
-
-    cardContainer: {
-      width: 280,
-
-      backgroundColor:
-        '#181622',
-
-      borderColor:
-        '#1E1D29',
-
-      borderWidth: 1.5,
-
-      borderRadius: 20,
-
-      padding: 16,
-
-      position: 'relative',
-    },
-
-
-    cardContainerSelected: {
-      borderColor:
-        '#853ACF',
-
-      borderWidth: 2,
-    },
-
-
-    header: {
-      flexDirection:
-        'row',
-
-      alignItems:
-        'center',
-
-      gap: 10,
-
-      marginBottom: 8,
-    },
-
-
-    dragHandle: {
-      flex: 1,
-
-      height: 32,
-    },
-
-
-    statusDot: {
-      width: 14,
-
-      height: 14,
-
-      borderRadius: 7,
-    },
-
-
-    titleInput: {
-      color: '#FFFFFF',
-
-      fontSize: 18,
-
-      fontWeight: 'bold',
-
-      marginBottom: 14,
-
-      paddingRight: 10,
-    },
-
-
-    descriptionBox: {
-      backgroundColor:
-        '#1F1D2C',
-
-      borderRadius: 14,
-
-      paddingHorizontal: 14,
-
-      paddingVertical: 12,
-
-      marginBottom: 14,
-    },
-
-
-    descriptionInput: {
-      color: '#FFFFFF',
-
-      fontSize: 14,
-
-      lineHeight: 20,
-
-      minHeight: 80,
-    },
-
-
-    subStepButton: {
-      backgroundColor:
-        '#181622',
-
-      borderRadius: 12,
-
-      paddingVertical: 10,
-
-      alignItems:
-        'flex-start',
-
-      paddingLeft: 4,
-    },
-
-
-    subStepButtonText: {
-      color: '#3B3947',
-
-      fontSize: 15,
-
-      fontWeight: '600',
-    },
-
-
-    connectionDot: {
-      width: DOT_SIZE,
-
-      height: DOT_SIZE,
-
-      borderRadius:
-        DOT_SIZE / 2,
-
-      position:
-        'absolute',
-
-      zIndex: 10,
-    },
-
-
-    dotTop: {
-      top:
-        -DOT_SIZE / 2,
-
-      alignSelf:
-        'center',
-
-      left: '50%',
-
-      transform: [
-        {
-          translateX:
-            -(DOT_SIZE / 2),
-        },
-      ],
-    },
-
-
-    dotBottom: {
-      bottom:
-        -DOT_SIZE / 2,
-
-      alignSelf:
-        'center',
-
-      left: '50%',
-
-      transform: [
-        {
-          translateX:
-            -(DOT_SIZE / 2),
-        },
-      ],
-    },
-
-
-    dotLeft: {
-      left:
-        -DOT_SIZE / 2,
-
-      top: '50%',
-
-      transform: [
-        {
-          translateY:
-            -(DOT_SIZE / 2),
-        },
-      ],
-    },
-
-
-    dotRight: {
-      right:
-        -DOT_SIZE / 2,
-
-      top: '50%',
-
-      transform: [
-        {
-          translateY:
-            -(DOT_SIZE / 2),
-        },
-      ],
-    },
-
-  });
+// ------------------------------------
+
+const styles = StyleSheet.create({
+
+  // Contenedor externo del chunk.
+  wrapper: {
+    alignItems: 'flex-start',
+    paddingTop: 24,
+    paddingHorizontal: 12,
+  },
+
+  // Texto que muestra el estado actual.
+  statusText: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 6,
+    marginLeft: 16,
+  },
+
+  // Tarjeta principal del chunk.
+  cardContainer: {
+    width: 280,
+
+    backgroundColor: '#181622',
+
+    borderColor: '#1E1D29',
+    borderWidth: 1.5,
+    borderRadius: 20,
+
+    padding: 16,
+
+    position: 'relative',
+  },
+
+  // Borde aplicado cuando el chunk
+  // está seleccionado.
+  cardContainerSelected: {
+    borderColor: '#853ACF',
+    borderWidth: 2,
+  },
+
+  // Contenedor del encabezado.
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 8,
+  },
+
+  // Área que funciona como zona de arrastre.
+  dragHandle: {
+    flex: 1,
+    height: 32,
+  },
+
+  // Punto que representa el estado del chunk.
+  statusDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+  },
+
+  // Campo de texto del título.
+  titleInput: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 14,
+    paddingRight: 10,
+  },
+
+  // Contenedor visual de la descripción.
+  descriptionBox: {
+    backgroundColor: '#1F1D2C',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 14,
+  },
+
+  // Campo de texto de la descripción.
+  descriptionInput: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    lineHeight: 20,
+    minHeight: 80,
+  },
+
+  // Botón para añadir un subpaso.
+  subStepButton: {
+    backgroundColor: '#181622',
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: 'flex-start',
+    paddingLeft: 4,
+  },
+
+  // Texto del botón de subpaso.
+  subStepButtonText: {
+    color: '#3B3947',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+
+  // Estilo base de los puntos de conexión.
+  connectionDot: {
+    width: DOT_SIZE,
+    height: DOT_SIZE,
+    borderRadius: DOT_SIZE / 2,
+
+    position: 'absolute',
+
+    zIndex: 10,
+  },
+
+  // ------------------------------------
+  // POSICIÓN DE LOS PUNTOS DE CONEXIÓN
+  // ------------------------------------
+
+  // Punto superior.
+  dotTop: {
+    top: -DOT_SIZE / 2,
+    alignSelf: 'center',
+    left: '50%',
+
+    transform: [
+      {
+        translateX:
+          -(DOT_SIZE / 2),
+      },
+    ],
+  },
+
+  // Punto inferior.
+  dotBottom: {
+    bottom: -DOT_SIZE / 2,
+    alignSelf: 'center',
+    left: '50%',
+
+    transform: [
+      {
+        translateX:
+          -(DOT_SIZE / 2),
+      },
+    ],
+  },
+
+  // Punto izquierdo.
+  dotLeft: {
+    left: -DOT_SIZE / 2,
+    top: '50%',
+
+    transform: [
+      {
+        translateY:
+          -(DOT_SIZE / 2),
+      },
+    ],
+  },
+
+  // Punto derecho.
+  dotRight: {
+    right: -DOT_SIZE / 2,
+    top: '50%',
+
+    transform: [
+      {
+        translateY:
+          -(DOT_SIZE / 2),
+      },
+    ],
+  },
+});

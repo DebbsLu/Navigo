@@ -1,6 +1,9 @@
-import React, {
-  useRef,
-} from 'react';
+
+// ------------------------------------
+// IMPORTACIONES
+// ------------------------------------
+
+import React, { useRef } from 'react';
 
 import {
   View,
@@ -10,26 +13,43 @@ import {
   GestureResponderEvent,
 } from 'react-native';
 
+// ------------------------------------
+// PROPIEDADES DEL COMPONENTE
+// ------------------------------------
+
 interface CanvasGestureLayerProps {
+  // Valor que controla el desplazamiento del canvas.
   pan: Animated.ValueXY;
 
+  // Valor que controla el nivel de zoom.
   zoom: Animated.Value;
 
+  // Límites mínimo y máximo del zoom.
   minZoom: number;
-
   maxZoom: number;
 
+  // Posición del mundo dentro del canvas.
   worldLeft: number;
-
   worldTop: number;
 
+  // Se ejecuta cuando se realiza un toque
+  // sobre un espacio vacío del canvas.
   onCanvasPress?: () => void;
 }
 
+// ------------------------------------
+// TIPOS AUXILIARES
+// ------------------------------------
+
+// Representa un punto dentro del canvas.
 interface Point {
   x: number;
   y: number;
 }
+
+// ------------------------------------
+// COMPONENTE PRINCIPAL
+// ------------------------------------
 
 const CanvasGestureLayer: React.FC<
   CanvasGestureLayerProps
@@ -42,41 +62,51 @@ const CanvasGestureLayer: React.FC<
   worldTop,
   onCanvasPress,
 }) => {
-  // =====================================================
-  // ESTADO DEL PAN
-  // =====================================================
 
+  // ------------------------------------
+  // ESTADO DEL PAN
+  // ------------------------------------
+
+  // Guarda la posición del canvas antes de comenzar
+  // un nuevo movimiento.
   const lastPan = useRef({
     x: 0,
     y: 0,
   });
 
-  // =====================================================
+  // ------------------------------------
   // ESTADO DEL PINCH
-  // =====================================================
+  // ------------------------------------
 
-  const initialDistance =
-    useRef<number | null>(null);
+  // Distancia entre los dos dedos al comenzar
+  // el gesto de zoom.
+  const initialDistance = useRef<number | null>(
+    null
+  );
 
-  const initialZoom =
-    useRef(1);
+  // Zoom existente cuando comienza el pinch.
+  const initialZoom = useRef(1);
 
-  const initialPan =
-    useRef({
-      x: 0,
-      y: 0,
-    });
+  // Posición del pan cuando comienza el pinch.
+  const initialPan = useRef({
+    x: 0,
+    y: 0,
+  });
 
-  const pinchCenter =
-    useRef<Point | null>(null);
+  // Punto central entre los dos dedos.
+  const pinchCenter = useRef<Point | null>(null);
 
-  // =====================================================
+  // ------------------------------------
   // OBTENER DISTANCIA ENTRE DOS DEDOS
-  // =====================================================
+  // ------------------------------------
 
+  // Calcula la distancia entre los dos primeros
+  // puntos de contacto.
   const getDistance = (
     touches: readonly any[]
   ): number | null => {
+
+    // Se necesitan al menos dos dedos.
     if (touches.length < 2) {
       return null;
     }
@@ -94,13 +124,17 @@ const CanvasGestureLayer: React.FC<
     );
   };
 
-  // =====================================================
+  // ------------------------------------
   // OBTENER CENTRO DEL PINCH
-  // =====================================================
+  // ------------------------------------
 
+  // Calcula el punto medio entre los dos dedos.
+  // Este punto se utiliza como referencia para
+  // mantener fijo el contenido mientras se hace zoom.
   const getPinchCenter = (
     touches: readonly any[]
   ): Point | null => {
+
     if (touches.length < 2) {
       return null;
     }
@@ -118,43 +152,50 @@ const CanvasGestureLayer: React.FC<
     };
   };
 
-  // =====================================================
-  // PAN RESPONDER
-  // =====================================================
+  // ------------------------------------
+  // CONFIGURACIÓN DEL PAN RESPONDER
+  // ------------------------------------
 
   const panResponder = useRef(
     PanResponder.create({
-      // -------------------------------------------------
-      // TOQUE INICIAL
-      // -------------------------------------------------
-      //
-      // Esta capa está detrás del mundo.
-      // Como el world usa pointerEvents="box-none",
-      // los toques sobre los chunks siguen llegando
-      // a los propios chunks.
-      //
-      // Un toque sobre espacio vacío sí llega aquí.
-      // -------------------------------------------------
 
+      // ------------------------------------
+      // TOQUE INICIAL
+      // ------------------------------------
+
+      // Esta capa se encuentra detrás del mundo.
+      //
+      // El world utiliza pointerEvents="box-none",
+      // por lo que los toques sobre los chunks
+      // pueden seguir siendo recibidos por ellos.
+      //
+      // Los toques realizados sobre espacios vacíos
+      // llegan a esta capa.
       onStartShouldSetPanResponder: () =>
         true,
 
-      // -------------------------------------------------
+      // ------------------------------------
       // DETECTAR MOVIMIENTO
-      // -------------------------------------------------
+      // ------------------------------------
 
+      // Determina cuándo el gesto debe comenzar
+      // a ser tratado como movimiento.
       onMoveShouldSetPanResponder: (
         _event,
         gestureState
       ) => {
+
         const touches =
           _event.nativeEvent.touches;
 
-        // Dos dedos = pinch
+        // Dos dedos indican un gesto de pinch.
         if (touches.length >= 2) {
           return true;
         }
 
+        // Para un solo dedo, se requiere un
+        // desplazamiento mínimo para evitar
+        // interpretar un toque como movimiento.
         const movedEnough =
           Math.abs(gestureState.dx) > 8 ||
           Math.abs(gestureState.dy) > 8;
@@ -162,43 +203,46 @@ const CanvasGestureLayer: React.FC<
         return movedEnough;
       },
 
-      // =================================================
+      // ------------------------------------
       // INICIO DEL GESTO
-      // =================================================
+      // ------------------------------------
 
       onPanResponderGrant: (
         event: GestureResponderEvent
       ) => {
+
+        // Obtener la posición actual del canvas.
         const currentPanX =
           (pan.x as any).__getValue();
 
         const currentPanY =
           (pan.y as any).__getValue();
 
-        // Guardar posición actual del pan
+        // Guardar la posición actual del pan.
         lastPan.current = {
           x: currentPanX,
           y: currentPanY,
         };
 
-        // Guardar posición inicial
+        // Guardar la posición inicial del gesto.
         initialPan.current = {
           x: currentPanX,
           y: currentPanY,
         };
 
-        // Guardar zoom inicial
+        // Guardar el nivel de zoom inicial.
         initialZoom.current =
           (zoom as any).__getValue();
 
         const touches =
           event.nativeEvent.touches;
 
-        // ---------------------------------------------
-        // Si comienza con dos dedos
-        // ---------------------------------------------
+        // ------------------------------------
+        // INICIO CON DOS DEDOS
+        // ------------------------------------
 
         if (touches.length >= 2) {
+
           const distance =
             getDistance(touches);
 
@@ -218,22 +262,26 @@ const CanvasGestureLayer: React.FC<
         }
       },
 
-      // =================================================
+      // ------------------------------------
       // MOVIMIENTO
-      // =================================================
+      // ------------------------------------
 
       onPanResponderMove: (
         event: GestureResponderEvent,
         gestureState
       ) => {
+
         const touches =
           event.nativeEvent.touches;
 
-        // =================================================
+        // ------------------------------------
         // PINCH ZOOM
-        // =================================================
+        // ------------------------------------
 
+        // Cuando hay dos dedos, el movimiento
+        // se interpreta como un gesto de zoom.
         if (touches.length >= 2) {
+
           const distance =
             getDistance(touches);
 
@@ -247,15 +295,18 @@ const CanvasGestureLayer: React.FC<
             return;
           }
 
-          // ---------------------------------------------
-          // Inicializar pinch si todavía no existe
-          // ---------------------------------------------
+          // ------------------------------------
+          // INICIALIZAR PINCH
+          // ------------------------------------
 
+          // Si el pinch todavía no tiene valores
+          // iniciales, se establecen en este momento.
           if (
             initialDistance.current ===
               null ||
             pinchCenter.current === null
           ) {
+
             initialDistance.current =
               distance;
 
@@ -273,10 +324,12 @@ const CanvasGestureLayer: React.FC<
             return;
           }
 
-          // ---------------------------------------------
-          // Calcular nuevo zoom
-          // ---------------------------------------------
+          // ------------------------------------
+          // CALCULAR NUEVO ZOOM
+          // ------------------------------------
 
+          // Compara la distancia actual entre los
+          // dedos con la distancia inicial.
           const scaleFactor =
             distance /
             initialDistance.current;
@@ -285,6 +338,8 @@ const CanvasGestureLayer: React.FC<
             initialZoom.current *
             scaleFactor;
 
+          // Mantener el zoom dentro de los
+          // límites establecidos.
           newZoom = Math.max(
             minZoom,
             Math.min(
@@ -293,10 +348,11 @@ const CanvasGestureLayer: React.FC<
             )
           );
 
-          // ---------------------------------------------
-          // Punto focal
-          // ---------------------------------------------
+          // ------------------------------------
+          // DETERMINAR PUNTO FOCAL
+          // ------------------------------------
 
+          // El punto focal es el centro del pinch.
           const focalX =
             pinchCenter.current.x;
 
@@ -312,10 +368,12 @@ const CanvasGestureLayer: React.FC<
           const startZoom =
             initialZoom.current;
 
-          // ---------------------------------------------
-          // Punto del mundo bajo los dedos
-          // ---------------------------------------------
+          // ------------------------------------
+          // OBTENER PUNTO DEL MUNDO
+          // ------------------------------------
 
+          // Determina qué punto del mundo se
+          // encuentra debajo de los dedos.
           const worldPointX =
             (focalX - startPanX) /
               startZoom -
@@ -326,10 +384,13 @@ const CanvasGestureLayer: React.FC<
               startZoom -
             worldTop;
 
-          // ---------------------------------------------
-          // Nuevo pan para mantener ese punto fijo
-          // ---------------------------------------------
+          // ------------------------------------
+          // CALCULAR NUEVO PAN
+          // ------------------------------------
 
+          // Ajusta la posición del canvas para que
+          // el mismo punto del mundo permanezca
+          // debajo del centro de los dedos.
           const newPanX =
             focalX -
             (worldPointX + worldLeft) *
@@ -340,9 +401,9 @@ const CanvasGestureLayer: React.FC<
             (worldPointY + worldTop) *
               newZoom;
 
-          // ---------------------------------------------
-          // Aplicar
-          // ---------------------------------------------
+          // ------------------------------------
+          // APLICAR CAMBIOS
+          // ------------------------------------
 
           zoom.setValue(newZoom);
 
@@ -354,10 +415,13 @@ const CanvasGestureLayer: React.FC<
           return;
         }
 
-        // =================================================
+        // ------------------------------------
         // PAN NORMAL
-        // =================================================
+        // ------------------------------------
 
+        // Cuando solamente hay un dedo,
+        // se desplaza el canvas según el
+        // movimiento realizado.
         const newX =
           lastPan.current.x +
           gestureState.dx;
@@ -372,25 +436,32 @@ const CanvasGestureLayer: React.FC<
         });
       },
 
-      // =================================================
+      // ------------------------------------
       // FIN DEL GESTO
-      // =================================================
+      // ------------------------------------
 
       onPanResponderRelease: (
         _event,
         gestureState
       ) => {
+
+        // Determina si hubo un desplazamiento
+        // suficiente para considerarlo movimiento.
         const moved =
           Math.abs(gestureState.dx) > 8 ||
           Math.abs(gestureState.dy) > 8;
 
+        // Si existe una distancia inicial,
+        // significa que se realizó un pinch.
         const wasPinching =
           initialDistance.current !== null;
 
-        // ---------------------------------------------
-        // TOQUE SIMPLE EN CANVAS
-        // ---------------------------------------------
+        // ------------------------------------
+        // TOQUE SIMPLE EN EL CANVAS
+        // ------------------------------------
 
+        // Si no hubo movimiento ni pinch,
+        // se considera un toque sobre espacio vacío.
         if (
           !moved &&
           !wasPinching
@@ -398,9 +469,9 @@ const CanvasGestureLayer: React.FC<
           onCanvasPress?.();
         }
 
-        // ---------------------------------------------
-        // Limpiar pinch
-        // ---------------------------------------------
+        // ------------------------------------
+        // LIMPIAR ESTADO DEL PINCH
+        // ------------------------------------
 
         initialDistance.current =
           null;
@@ -408,10 +479,12 @@ const CanvasGestureLayer: React.FC<
         pinchCenter.current =
           null;
 
-        // ---------------------------------------------
-        // Actualizar referencias
-        // ---------------------------------------------
+        // ------------------------------------
+        // ACTUALIZAR REFERENCIAS
+        // ------------------------------------
 
+        // Guardar los valores actuales para
+        // utilizarlos en el siguiente gesto.
         initialZoom.current =
           (zoom as any).__getValue();
 
@@ -421,17 +494,22 @@ const CanvasGestureLayer: React.FC<
         };
       },
 
-      // =================================================
+      // ------------------------------------
       // TERMINACIÓN DEL GESTO
-      // =================================================
+      // ------------------------------------
 
+      // Se ejecuta cuando React Native termina
+      // el gesto de manera externa.
       onPanResponderTerminate: () => {
+
+        // Limpiar el estado del pinch.
         initialDistance.current =
           null;
 
         pinchCenter.current =
           null;
 
+        // Actualizar la última posición conocida.
         lastPan.current = {
           x: (pan.x as any).__getValue(),
           y: (pan.y as any).__getValue(),
@@ -440,9 +518,9 @@ const CanvasGestureLayer: React.FC<
     })
   ).current;
 
-  // =====================================================
-  // RENDER
-  // =====================================================
+  // ------------------------------------
+  // RENDERIZADO
+  // ------------------------------------
 
   return (
     <View
@@ -452,9 +530,23 @@ const CanvasGestureLayer: React.FC<
   );
 };
 
+// ------------------------------------
+// EXPORTACIÓN
+// ------------------------------------
+
 export default CanvasGestureLayer;
 
+// ------------------------------------
+// ESTILOS
+// ------------------------------------
+
 const styles = StyleSheet.create({
+
+  // Capa que ocupa todo el canvas.
+  //
+  // Se coloca en el nivel inferior mediante
+  // zIndex para recibir los gestos del fondo
+  // sin interferir con los elementos superiores.
   layer: {
     ...StyleSheet.absoluteFill,
     zIndex: 0,
