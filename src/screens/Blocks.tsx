@@ -1,5 +1,6 @@
 // Pantalla "Bloqueos"
 // Muestra la lista de bloqueos guardados (AsyncStorage).
+import { useRoute } from '@react-navigation/native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -96,6 +97,16 @@ const OPTIONS = [
 const formatTime = (d: Date | null) =>
   d ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined;
 
+/** Convierte "09:30" (como se guarda en el bloqueo) a un Date para el formulario. */
+const timeToDate = (hhmm?: string): Date | null => {
+  if (!hhmm) return null;
+  const [h, m] = hhmm.split(':').map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return null; // formato inesperado
+  const d = new Date();
+  d.setHours(h, m, 0, 0);
+  return d;
+};
+
 /** Saca un mensaje legible de cualquier error. */
 const errorMessage = (e: unknown, fallback: string): string =>
   e instanceof StorageError || e instanceof Error ? e.message : fallback;
@@ -152,6 +163,9 @@ const SelectField: React.FC<{
 /*  Pantalla */
 const Blocks: React.FC = () => {
   const insets = useSafeAreaInsets();
+    // Misión desde la que se entró a esta pantalla (si se entró desde una)
+    const route = useRoute<any>();
+    const initialMissionId: string | undefined = route.params?.missionId;
 
    /* ── Lista de bloqueos ── */
   const [blocks, setBlocks] = useState<Block[]>([]);
@@ -163,6 +177,8 @@ const Blocks: React.FC = () => {
   /* ── Modal y guardado ── */
   const [modalVisible, setModalVisible] = useState(false);
   const [saving, setSaving] = useState(false); // evita doble toque en "añadir bloqueo"
+  const [readOnly, setReadOnly] = useState(false); // true = modal de detalles
+  const formOffset = useRef(0); // posición del formulario dentro del scroll 
 
   /* ── Misiones disponibles (vienen de Task_home) ── */
   const [missions, setMissions] = useState<Mission[]>([]);
@@ -308,13 +324,70 @@ const Blocks: React.FC = () => {
   /** Abre el formulario: lo limpia y recarga las misiones de Task_home. */
   const openModal = async () => {
     resetForm();
+    setReadOnly(false); // el modal de creación es editable
+    let list: Mission[] = [];
     try {
-      setMissions(await loadMissions());
+      //setMissions(await loadMissions());
+      list = await loadMissions();
+      setMissions(list);
     } catch (e) {
       console.error('[Blocks] Error al cargar misiones:', e);
       setMissions([]);
       setMissionsError(errorMessage(e, 'No se pudieron cargar las misiones.')); // se ve bajo el campo de misión
     }
+    setModalVisible(true);
+
+    //  si venimos de una misión y todavía existe, se deja elegida.
+    // Usa selectMission, así también carga sus pasos. El usuario puede cambiarla igual.
+    if (initialMissionId && list.some((m) => m.id === initialMissionId)) {
+      selectMission(initialMissionId);
+    }
+  };
+
+  /** Flechita de una tarjeta: abre el modal con los datos del bloqueo, sin poder editarlos. */
+  const openDetails = async (b: Block) => {
+  resetForm();
+  setReadOnly(true);
+
+  let list: Mission[] = [];
+  try {
+    list = await loadMissions();
+  } catch (e) {
+    console.error('[Blocks] Error al cargar misiones:', e);
+  }
+  setMissions(list);
+
+  // ── Rellenar el formulario con lo guardado ──
+  setEnabled(b.enabled);
+  setName(b.name);
+  // Índices [0,2,4] -> 7 booleanos [true,false,true,false,true,false,false]
+  setDays(Array.from({ length: 7 }, (_, i) => b.days.includes(i)));
+  setTypeId(b.type);
+  setApps(b.apps);
+  setWebsites(b.websites.length ? b.websites : ['']); // siempre al menos un campo
+  setOpts(b.options ?? {});
+
+  // Bloqueo regular: "HH:mm" -> Date
+  setStartTime(timeToDate(b.startTime));
+  setEndTime(timeToDate(b.endTime));
+
+  // Bloqueo por uso: se guarda en minutos; si son horas exactas se muestra en horas
+    if (b.usageMinutes !== undefined) {
+      if (b.usageMinutes >= 60 && b.usageMinutes % 60 === 0) {
+        setUsageValue(String(b.usageMinutes / 60));
+        setUsageUnit('h');
+      } else {
+        setUsageValue(String(b.usageMinutes));
+        setUsageUnit('min');
+      }
+    }
+
+    // Misión (y sus pasos, para poder mostrar el título del paso)
+    if (b.missionId) {
+      await selectMission(b.missionId);
+      if (b.stepId) setStepId(b.stepId); // selectMission lo limpia, por eso va después
+    }
+
     setModalVisible(true);
   };
 
@@ -342,7 +415,8 @@ const Blocks: React.FC = () => {
     );
     if (!first) return;
     const y = sectionY.current[first];
-    if (y !== undefined) scrollRef.current?.scrollTo({ y: Math.max(0, y - 8), animated: true });
+    //if (y !== undefined) scrollRef.current?.scrollTo({ y: Math.max(0, y - 8), animated: true });
+    if (y !== undefined) scrollRef.current?.scrollTo({ y: Math.max(0, y + formOffset.current - 8), animated: true });
   };
 
   /** Botón "+ añadir bloqueo": valida, guarda y cierra el modal. */
@@ -437,8 +511,8 @@ const Blocks: React.FC = () => {
                   </View>
                   <Text style={styles.cardName} numberOfLines={1}>
                     {b.name} - <Text style={{ color: C.purpleLight, fontWeight: '700' }}>{BLOCK_TYPE_SHORT[b.type]}</Text>
-                  </Text>
-                  <BtnCircleSmall size={40} />
+                  </Text> 
+                  <BtnCircleSmall size={40} onPress={() => openDetails(b)}/> 
                 </View>
 
                 {pendingDeleteId === b.id && (
@@ -478,7 +552,7 @@ const Blocks: React.FC = () => {
             >
               {/* On / Off y cerrar */}
               <View style={styles.topRow}>
-                <Pressable onPress={() => setEnabled((e) => !e)} style={styles.switch}>
+                <Pressable onPress={() => setEnabled((e) => !e)} disabled={readOnly} style={styles.switch}>
                   <View style={[styles.switchHalf, enabled && styles.switchHalfOn]}>
                     <Text style={styles.switchText}>On</Text>
                   </View>
@@ -488,7 +562,11 @@ const Blocks: React.FC = () => {
                 </Pressable>
                 <BtnClose onPress={() => setModalVisible(false)} size={14} />
               </View>
-
+             
+             <View
+                style={readOnly ? styles.locked : undefined}
+                onLayout={(e) => { formOffset.current = e.nativeEvent.layout.y; }}
+              >
               <View onLayout={reg('name')}>
                 <Label>Nombre del bloqueo:</Label>
                 <TextInput
@@ -744,7 +822,10 @@ const Blocks: React.FC = () => {
                   />
                 ))}
               </View>
+            </View> 
 
+            {!readOnly && (
+               <>   
               {Object.keys(errors).length > 0 && (
                 <Text style={[styles.errorText, { marginTop: 18 }]}>
                   Revisa los campos marcados en rojo para poder guardar.
@@ -764,7 +845,10 @@ const Blocks: React.FC = () => {
                 <View style={styles.submitError}>
                   <Text style={styles.errorText}>No se pudo guardar: {submitError}</Text>
                 </View>
-              )}
+              )} 
+            </>
+             )} 
+            
             </ScrollView>
           </View>
         </View>
@@ -828,6 +912,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   sheetContent: { padding: 18, paddingBottom: 28 },
+  locked: { pointerEvents: 'none' }, // nada del formulario recibe toques; el scroll y la X siguen funcionando
   topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
 
   switch: {

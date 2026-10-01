@@ -16,6 +16,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   useRoute,
   RouteProp,
+  useNavigation,
 } from '@react-navigation/native';
 
 import TexturedScreen from '../components/TexturedScreen';
@@ -123,6 +124,15 @@ const InfinityCanvas: React.FC =
       taskId,
       title,
     } = route.params;
+
+    // Navegación hacia otras pantallas
+    const navigation = useNavigation<any>();
+
+    // Abre Blocks mandando la misión actual (taskId) para que
+    // "Selecciona la misión" venga preseleccionada
+    const handleOpenBlocks = () => {
+      navigation.navigate('Blocks', { missionId: taskId });
+    };
 
 
     // ===================================================
@@ -855,6 +865,8 @@ const InfinityCanvas: React.FC =
               onAddChunk={
                 handleAddChunk
               }
+
+              onPressBloqueo={handleOpenBlocks} // bloqueo
             />
           </View>
 
