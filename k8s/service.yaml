@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: navigo
+  namespace: navigo
+spec:
+  selector:
+    app: navigo
+  ports:
+    - protocol: TCP
+      port: 8081
+      targetPort: 8081
+  type: ClusterIP

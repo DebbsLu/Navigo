@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: navigo
+  namespace: navigo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: navigo
+  template:
+    metadata:
+      labels:
+        app: navigo
+    spec:
+      containers:
+        - name: navigo
+          image: navigo:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8081
