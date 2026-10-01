@@ -189,9 +189,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 14,
   },
-<<<<<<< HEAD
-});
-=======
+
   deleteButton: {
     backgroundColor: '#FFFFFF',
     paddingVertical: 12,
@@ -204,4 +202,3 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 });
->>>>>>> 19fe629dd8b5a3ee713ec721f3c9a9b42f80b377
