@@ -24,7 +24,7 @@ export const BtnCircleSmall: React.FC<BtnCircleSmallProps> = ({
   iconName = 'arrow-forward',
   backgroundColor = 'rgba(133, 58, 207, 0.2)',
   iconColor = '#FFFFFF',
-  size = 36,
+  size = 56,
   onPress,
   style,
 }) => {

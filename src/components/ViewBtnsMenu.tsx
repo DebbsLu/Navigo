@@ -63,33 +63,23 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-
-    backgroundColor: '#13111C',
-    borderColor: '#1E1D29',
+    justifyContent: 'space-between',
+    backgroundColor: '#13111C', // Fondo del contenedor principal
+    borderColor: '#1E1D29',     // Borde del contenedor principal
     borderWidth: 1.5,
-
-    borderRadius: 20,
-
-    padding: 7,
-    gap: 8,
-
-    alignSelf: 'center',
+    borderRadius: 24,          // Bordes muy redondeados como en la imagen
+    padding: 12,
+    width: '100%',
   },
-
   button: {
-    width: 60,
-    height: 60,
-
-    backgroundColor: '#181622',
-
+    width: 80,
+    height: 80,
+    backgroundColor: '#181622', // Fondo de cada botón
     borderWidth: 1.5,
-    borderRadius: 17,
-
+    borderRadius: 20,          // Esquinas redondeadas internas
     alignItems: 'center',
     justifyContent: 'center',
   },
 });
-
 
 export default ViewBtnsMenu;

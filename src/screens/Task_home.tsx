@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
   },
   buttonContainer: {
     alignItems: 'center',
-    marginVertical: -1,
+    marginVertical: 12,
   },
   listContainer: {
     flex: 1,

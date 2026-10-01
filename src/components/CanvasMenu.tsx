@@ -10,7 +10,7 @@ interface CanvasMenuProps {
 
 // Ícono SVG para Chunks (Cubo con conexión/lápiz)
 const ChunksIcon: React.FC = () => (
-  <Svg width={28} height={28} viewBox="0 0 24 24" fill="none">
+  <Svg width={36} height={36} viewBox="0 0 24 24" fill="none">
     {/* Trazo / Línea superior */}
     <Path
       d="M5 10C5 7.79086 6.79086 6 9 6H13C14.1046 6 15 5.10457 15 4V4"
@@ -49,7 +49,7 @@ const ChunksIcon: React.FC = () => (
 
 // Ícono SVG para Bloqueo (Mira / Diana / Target)
 const BloqueoIcon: React.FC = () => (
-  <Svg width={28} height={28} viewBox="0 0 24 24" fill="none">
+  <Svg width={36} height={36} viewBox="0 0 24 24" fill="none">
     {/* Círculo externo */}
     <Circle cx={12} cy={12} r={8} stroke="#FFFFFF" strokeWidth={1.8} />
     {/* Cruz central */}
@@ -120,53 +120,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     alignSelf: 'center',
   },
-
   cardContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-
     backgroundColor: '#13111C',
     borderColor: '#1E1D29',
     borderWidth: 1.5,
-
-    borderRadius: 20,
-
-    padding: 7,
-    gap: 8,
+    borderRadius: 28,
+    padding: 10,
+    gap: 12,
   },
-
   itemWrapper: {
     alignItems: 'center',
   },
-
   button: {
-    width: 60,
-    height: 60,
-
+    width: 80,
+    height: 80,
     backgroundColor: '#181622',
     borderColor: '#1E1D29',
     borderWidth: 1.5,
-
-    borderRadius: 17,
-
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
-
   labelsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-
     width: '100%',
-
-    paddingHorizontal: 8,
-    marginTop: 5,
+    paddingHorizontal: 12,
+    marginTop: 8,
   },
-
   labelText: {
     color: '#A192B4',
-    fontSize: 12,
+    fontSize: 15,
     fontWeight: '500',
     textAlign: 'center',
     flex: 1,

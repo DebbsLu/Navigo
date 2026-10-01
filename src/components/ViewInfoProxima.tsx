@@ -57,37 +57,36 @@ export const ViewInfoProxima: React.FC<ViewInfoProximaProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: 16, // 20 × 0.8
-    padding: 14.4,    // 18 × 0.8
+    borderRadius: 20,
+    padding: 18,
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
     width: '100%',
   },
-
   contentContainer: {
     flex: 1,
-    marginRight: 9.6, // 12 × 0.8
+    marginRight: 12,
   },
-
+  // Title2: Normal, color #DED1EB
   title2: {
-    fontSize: 12,     // 15 × 0.8
+    fontSize: 15,
     fontWeight: '400',
     color: '#DED1EB',
   },
-
+  // Title1: Bold, mismo tamaño que Title2, color #DED1EB
   title1: {
-    fontSize: 12,     // 15 × 0.8
+    fontSize: 15,
     fontWeight: '700',
     color: '#DED1EB',
-    marginTop: 9.6,   // 12 × 0.8
-    marginBottom: 11.2, // 14 × 0.8
+    marginTop: 12,
+    marginBottom: 14,
   },
-
+  // View_etiqueta
   tag: {
     alignSelf: 'flex-start',
-    paddingHorizontal: 12.8, // 16 × 0.8
-    paddingVertical: 6.4,    // 8 × 0.8
-    borderRadius: 16,        // 20 × 0.8
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
   },
 });
