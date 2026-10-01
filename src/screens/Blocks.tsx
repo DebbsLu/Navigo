@@ -76,7 +76,7 @@ const BLOCK_TYPES: { id: BlockTypeId; label: string; desc: string }[] = [
   { id: 'pasos', label: 'Bloqueo por pasos', desc: 'Debes terminar este paso para desbloquear' },
 ];
 
-// Etiqueta y color de cada estado de un paso (mismos colores que ChunkNode).
+// Etiqueta y color de cada estado de un paso.
 const STEP_STATUS: Record<StepStatus, { label: string; color: string }> = {
   avanzando: { label: 'Avanzando', color: '#853ACF' },
   completado: { label: 'Completado', color: '#C694EB' },
@@ -338,7 +338,7 @@ const Blocks: React.FC = () => {
     setModalVisible(true);
 
     //  si venimos de una misión y todavía existe, se deja elegida.
-    // Usa selectMission, así también carga sus pasos. El usuario puede cambiarla igual.
+    // Usa selectMission, así también carga sus pasos. (El usuario puede cambiarla igual)
     if (initialMissionId && list.some((m) => m.id === initialMissionId)) {
       selectMission(initialMissionId);
     }
@@ -360,7 +360,7 @@ const Blocks: React.FC = () => {
   // ── Rellenar el formulario con lo guardado ──
   setEnabled(b.enabled);
   setName(b.name);
-  // Índices [0,2,4] -> 7 booleanos [true,false,true,false,true,false,false]
+  // Índices [0,2,4]  7 booleanos [true,false,true,false,true,false,false]
   setDays(Array.from({ length: 7 }, (_, i) => b.days.includes(i)));
   setTypeId(b.type);
   setApps(b.apps);
