@@ -41,6 +41,7 @@ interface ConnectionPointState {
   right?: boolean;
 }
 
+
 // Representa la posición del chunk dentro del canvas.
 interface ChunkPosition {
   x: number;
@@ -78,6 +79,7 @@ interface ChunkNodeProps {
     dy: number
   ) => void;
 
+
   // Se ejecuta cuando cambia el título.
   onTitleChange?: (
     title: string
@@ -100,8 +102,14 @@ interface ChunkNodeProps {
   // Estado de los puntos de conexión.
   connections?: ConnectionPointState;
 
+  // Punto que está actualmente seleccionado
+  // como origen de una conexión.
+  pendingConnectionSide?: ConnectionSide | null;
+
   // Se ejecuta al cerrar/eliminar el chunk.
   onClose?: () => void;
+
+  onLayout?: (width: number, height: number) => void;
 
   // Se ejecuta al presionar el botón de subpaso.
   onPressSubStep?: () => void;
@@ -118,6 +126,9 @@ interface ChunkNodeProps {
 
 // Tamaño de los puntos de conexión.
 const DOT_SIZE = 14;
+
+//Tamaño del tactil
+const DOT_TOUCH_SIZE = 44;
 
 // ------------------------------------
 // CONFIGURACIÓN DE ESTADOS
@@ -193,9 +204,11 @@ const ChunkNode: React.FC<
   onStatusChange,
   subStepButtonText = '+ Añadir subpaso',
   connections = {},
+  onLayout,
   onClose,
   onPressSubStep,
   onConnectPointPress,
+  pendingConnectionSide,
 }) => {
 
   // Obtiene la configuración visual
@@ -297,7 +310,7 @@ const ChunkNode: React.FC<
   return (
     <View
       style={styles.wrapper}
-      onTouchStart={onSelect}
+      
     >
 
       {/* ------------------------------------
@@ -326,6 +339,10 @@ const ChunkNode: React.FC<
           selected &&
             styles.cardContainerSelected,
         ]}
+        onLayout={(event) => {
+        const { width, height } = event.nativeEvent.layout;
+        onLayout?.(width, height);
+        }}
       >
 
         {/* ------------------------------------
@@ -447,70 +464,85 @@ const ChunkNode: React.FC<
             PUNTO DE CONEXIÓN SUPERIOR
             ------------------------------------ */}
 
-        <TouchableOpacity
-          activeOpacity={0.8}
-          onPress={() =>
-            onConnectPointPress?.(
-              'top'
-            )
-          }
-          style={[
-            styles.connectionDot,
-            styles.dotTop,
-            {
-              backgroundColor:
-                connections.top
-                  ? '#9793C7'
-                  : 'rgba(151, 147, 199, 0.10)',
-            },
-          ]}
-        />
+<TouchableOpacity
+  style={[
+    styles.connectionHitArea,
+    styles.connectionTop,
+  ]}
+  onPress={() => onConnectPointPress?.('top')}
+  activeOpacity={0.7}
+>
+  <View
+    style={[
+      styles.connectionDot,
+      {
+        backgroundColor: connections?.top
+          ? '#A855F7'
+          : '#5B5268',
+      },
+    ]}
+  />
+</TouchableOpacity>
 
-        {/* ------------------------------------
-            PUNTO DE CONEXIÓN INFERIOR
-            ------------------------------------ */}
+<TouchableOpacity
+  style={[
+    styles.connectionHitArea,
+    styles.connectionBottom,
+  ]}
+  onPress={() => onConnectPointPress?.('bottom')}
+  activeOpacity={0.7}
+>
+  <View
+    style={[
+      styles.connectionDot,
+      {
+        backgroundColor: connections?.bottom
+          ? '#A855F7'
+          : '#5B5268',
+      },
+    ]}
+  />
+</TouchableOpacity>
 
-        <TouchableOpacity
-          activeOpacity={0.8}
-          onPress={() =>
-            onConnectPointPress?.(
-              'bottom'
-            )
-          }
-          style={[
-            styles.connectionDot,
-            styles.dotBottom,
-            {
-              backgroundColor:
-                connections.bottom
-                  ? '#9793C7'
-                  : 'rgba(151, 147, 199, 0.10)',
-            },
-          ]}
-        />
+<TouchableOpacity
+  style={[
+    styles.connectionHitArea,
+    styles.connectionLeft,
+  ]}
+  onPress={() => onConnectPointPress?.('left')}
+  activeOpacity={0.7}
+>
+  <View
+    style={[
+      styles.connectionDot,
+      {
+        backgroundColor: connections?.left
+          ? '#A855F7'
+          : '#5B5268',
+      },
+    ]}
+  />
+</TouchableOpacity>
 
-        {/* ------------------------------------
-            PUNTO DE CONEXIÓN IZQUIERDO
-            ------------------------------------ */}
-
-        <TouchableOpacity
-          activeOpacity={0.8}
-          onPress={() =>
-            onConnectPointPress?.(
-              'left'
-            )
-          }
-          style={[
-            styles.connectionDot,
-            styles.dotLeft,
-            {
-              backgroundColor:
-                connections.left
-                  ? '#9793C7'
-                  : 'rgba(151, 147, 199, 0.10)',
-            },
-          ]}
-        />
+<TouchableOpacity
+  style={[
+    styles.connectionHitArea,
+    styles.connectionRight,
+  ]}
+  onPress={() => onConnectPointPress?.('right')}
+  activeOpacity={0.7}
+>
+  <View
+    style={[
+      styles.connectionDot,
+      {
+        backgroundColor: connections?.right
+          ? '#A855F7'
+          : '#5B5268',
+      },
+    ]}
+  />
+</TouchableOpacity>
 
         {/* ------------------------------------
             PUNTO DE CONEXIÓN DERECHO
@@ -519,21 +551,40 @@ const ChunkNode: React.FC<
         <TouchableOpacity
           activeOpacity={0.8}
           onPress={() =>
-            onConnectPointPress?.(
-              'right'
-            )
+            onConnectPointPress?.('right')
           }
           style={[
-            styles.connectionDot,
-            styles.dotRight,
-            {
-              backgroundColor:
-                connections.right
-                  ? '#9793C7'
-                  : 'rgba(151, 147, 199, 0.10)',
-            },
+            styles.connectionHitArea,
+            styles.hitRight,
           ]}
-        />
+        >
+          <View
+            style={[
+              styles.connectionDot,
+              {
+                backgroundColor:
+                  connections.right
+                    ? '#9793C7'
+                    : 'rgba(151, 147, 199, 0.18)',
+
+                borderWidth:
+                  pendingConnectionSide === 'right'
+                    ? 2
+                    : 0,
+
+                borderColor:
+                  pendingConnectionSide === 'right'
+                    ? '#C694EB'
+                    : 'transparent',
+
+                transform:
+                  pendingConnectionSide === 'right'
+                    ? [{ scale: 1.35 }]
+                    : [{ scale: 1 }],
+              },
+            ]}
+          />
+        </TouchableOpacity>
 
       </View>
     </View>
@@ -637,13 +688,25 @@ const styles = StyleSheet.create({
   },
 
   // Botón para añadir un subpaso.
+  /*
   subStepButton: {
     backgroundColor: '#181622',
     borderRadius: 12,
     paddingVertical: 10,
     alignItems: 'flex-start',
     paddingLeft: 4,
-  },
+  },*/
+
+  subStepButton: {
+  backgroundColor: '#181622',
+  borderRadius: 12,
+  paddingVertical: 10,
+  alignItems: 'flex-start',
+  paddingLeft: 4,
+
+  // Deja espacio físico antes del punto inferior.
+  marginBottom: 12,
+},
 
   // Texto del botón de subpaso.
   subStepButtonText: {
@@ -652,20 +715,91 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // Estilo base de los puntos de conexión.
-  connectionDot: {
-    width: DOT_SIZE,
-    height: DOT_SIZE,
-    borderRadius: DOT_SIZE / 2,
-
-    position: 'absolute',
-
-    zIndex: 10,
-  },
 
   // ------------------------------------
   // POSICIÓN DE LOS PUNTOS DE CONEXIÓN
   // ------------------------------------
+
+// ------------------------------------
+// ÁREA TÁCTIL DE CONEXIONES
+// ------------------------------------
+
+connectionHitArea: {
+  position: 'absolute',
+  width: 40,
+  height: 40,
+  alignItems: 'center',
+  justifyContent: 'center',
+  zIndex: 100,
+  elevation: 10,
+},
+
+connectionDot: {
+  width: DOT_SIZE,
+  height: DOT_SIZE,
+  borderRadius: DOT_SIZE / 2,
+},
+
+connectionTop: {
+  top: -20,
+  left: '50%',
+  transform: [{ translateX: -20 }],
+},
+
+connectionBottom: {
+  bottom: -20,
+  left: '50%',
+  transform: [{ translateX: -20 }],
+},
+
+connectionLeft: {
+  left: -20,
+  top: '50%',
+  transform: [{ translateY: -20 }],
+},
+
+connectionRight: {
+  right: -20,
+  top: '50%',
+  transform: [{ translateY: -20 }],
+},
+
+// ------------------------------------
+// POSICIONES
+// ------------------------------------
+
+hitTop: {
+  top: -(DOT_TOUCH_SIZE / 2),
+  left: '50%',
+
+  marginLeft:
+    -(DOT_TOUCH_SIZE / 2),
+},
+
+hitBottom: {
+  bottom: -(DOT_TOUCH_SIZE / 2),
+  left: '50%',
+
+  marginLeft:
+    -(DOT_TOUCH_SIZE / 2),
+},
+
+hitLeft: {
+  left: -(DOT_TOUCH_SIZE / 2),
+  top: '50%',
+
+  marginTop:
+    -(DOT_TOUCH_SIZE / 2),
+},
+
+hitRight: {
+  right: -(DOT_TOUCH_SIZE / 2),
+  top: '50%',
+
+  marginTop:
+    -(DOT_TOUCH_SIZE / 2),
+},
+  
 
   // Punto superior.
   dotTop: {

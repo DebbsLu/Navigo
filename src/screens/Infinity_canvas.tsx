@@ -266,7 +266,6 @@ const WORLD_CENTER = WORLD_SIZE / 2;
 // ------------------------------------
 
 const NODE_WIDTH = 280;
-const NODE_HEIGHT = 250;
 
 const NODE_LEFT_OFFSET = 12;
 const NODE_TOP_OFFSET = 24;
@@ -468,10 +467,23 @@ const InfinityCanvas: React.FC = () => {
   // CONEXIONES
   // =====================================================
 
-  const [
-    connections,
-    setConnections,
-  ] = useState<CanvasConnection[]>([]);
+
+    const [chunkSizes, setChunkSizes] = useState<
+      Record<
+        string,
+        {
+          width: number;
+          height: number;
+        }
+      >
+    >({});
+
+    const [
+      connections,
+      setConnections,
+    ] = useState<CanvasConnection[]>([]);
+
+
 
   // =====================================================
   // CONEXIÓN PENDIENTE
@@ -487,6 +499,36 @@ const InfinityCanvas: React.FC = () => {
   ] = useState<PendingConnection | null>(
     null
   );
+
+  // =====================================================
+// MEDIR CHUNK
+// =====================================================
+
+const handleChunkLayout = (
+  chunkId: string,
+  width: number,
+  height: number
+) => {
+  setChunkSizes(prev => {
+    const current = prev[chunkId];
+
+    if (
+      current &&
+      current.width === width &&
+      current.height === height
+    ) {
+      return prev;
+    }
+
+    return {
+      ...prev,
+      [chunkId]: {
+        width,
+        height,
+      },
+    };
+  });
+};
 
   // =====================================================
   // PAN
@@ -692,7 +734,7 @@ const InfinityCanvas: React.FC = () => {
 
       y:
         WORLD_CENTER -
-        NODE_HEIGHT / 2,
+        125,
     };
 
     const newAudio: AudioNodeData = {
@@ -1405,126 +1447,154 @@ const InfinityCanvas: React.FC = () => {
    * Gestiona la selección de dos puntos de conexión
    * para crear una línea entre nodos.
    */
-  const handleConnectionPointPress = (
-    nodeId: string,
-    side: ConnectionSide
-  ) => {
+const handleConnectionPointPress = (
+  nodeId: string,
+  side: ConnectionSide
+) => {
 
-    // ---------------------------------------------------
-    // Primer punto
-    // ---------------------------------------------------
+  // =================================================
+  // PRIMER PUNTO
+  // =================================================
 
-    if (pendingConnection === null) {
+  if (pendingConnection === null) {
 
-      setPendingConnection({
-        nodeId,
-        side,
-      });
-
-      return;
-    }
-
-    // ---------------------------------------------------
-    // Se seleccionó exactamente el mismo punto
-    // ---------------------------------------------------
-
-    if (
-      pendingConnection.nodeId === nodeId &&
-      pendingConnection.side === side
-    ) {
-      setPendingConnection(null);
-      return;
-    }
-
-    // ---------------------------------------------------
-    // Se seleccionó otro punto del mismo nodo
-    // ---------------------------------------------------
-
-    if (
-      pendingConnection.nodeId === nodeId
-    ) {
-      setPendingConnection({
-        nodeId,
-        side,
-      });
-
-      return;
-    }
-
-    // ---------------------------------------------------
-    // Comprobar si la conexión ya existe
-    // ---------------------------------------------------
-
-    const alreadyExists =
-      connections.some(connection =>
-        (
-          connection.fromNodeId ===
-            pendingConnection.nodeId &&
-          connection.fromSide ===
-            pendingConnection.side &&
-          connection.toNodeId ===
-            nodeId &&
-          connection.toSide ===
-            side
-        ) ||
-        (
-          connection.fromNodeId ===
-            nodeId &&
-          connection.fromSide ===
-            side &&
-          connection.toNodeId ===
-            pendingConnection.nodeId &&
-          connection.toSide ===
-            pendingConnection.side
-        )
-      );
-
-    if (alreadyExists) {
-      setPendingConnection(null);
-      return;
-    }
-
-    // ---------------------------------------------------
-    // Crear nueva conexión
-    // ---------------------------------------------------
-
-    const newConnection:
-      CanvasConnection = {
-        id:
-          `${Date.now()}-${Math.random()}`,
-
-        fromNodeId:
-          pendingConnection.nodeId,
-
-        fromSide:
-          pendingConnection.side,
-
-        toNodeId:
-          nodeId,
-
-        toSide:
-          side,
-      };
-
-    setConnections(prev => [
-      ...prev,
-      newConnection,
-    ]);
-
-    // Activar visualmente ambos puntos.
-    activateConnectionPoint(
-      pendingConnection.nodeId,
-      pendingConnection.side
-    );
-
-    activateConnectionPoint(
+    setPendingConnection({
       nodeId,
-      side
+      side,
+    });
+
+    // Hace visible qué nodo estamos usando.
+    setSelectedNodeId(nodeId);
+
+    return;
+  }
+
+  // =================================================
+  // MISMO PUNTO
+  // =================================================
+
+  if (
+    pendingConnection.nodeId === nodeId &&
+    pendingConnection.side === side
+  ) {
+
+    // Pulsar nuevamente el mismo punto
+    // cancela la conexión.
+    setPendingConnection(null);
+
+    return;
+  }
+
+  // =================================================
+  // OTRO PUNTO DEL MISMO NODO
+  // =================================================
+
+  if (
+    pendingConnection.nodeId === nodeId
+  ) {
+
+    // Permite cambiar el origen
+    // sin tener que cancelar primero.
+    setPendingConnection({
+      nodeId,
+      side,
+    });
+
+    return;
+  }
+
+  // =================================================
+  // EVITAR CONEXIONES DUPLICADAS
+  // =================================================
+
+  const alreadyExists =
+    connections.some(connection =>
+
+      (
+        connection.fromNodeId ===
+          pendingConnection.nodeId &&
+
+        connection.fromSide ===
+          pendingConnection.side &&
+
+        connection.toNodeId ===
+          nodeId &&
+
+        connection.toSide ===
+          side
+      )
+
+      ||
+
+      (
+        connection.fromNodeId ===
+          nodeId &&
+
+        connection.fromSide ===
+          side &&
+
+        connection.toNodeId ===
+          pendingConnection.nodeId &&
+
+        connection.toSide ===
+          pendingConnection.side
+      )
     );
 
-    // Finalizar selección.
+  if (alreadyExists) {
+
     setPendingConnection(null);
+
+    return;
+  }
+
+  // =================================================
+  // CREAR CONEXIÓN
+  // =================================================
+
+  const newConnection: CanvasConnection = {
+
+    id:
+      `${Date.now()}-${Math.random()}`,
+
+    fromNodeId:
+      pendingConnection.nodeId,
+
+    fromSide:
+      pendingConnection.side,
+
+    toNodeId:
+      nodeId,
+
+    toSide:
+      side,
   };
+
+  setConnections(prev => [
+    ...prev,
+    newConnection,
+  ]);
+
+  // =================================================
+  // ACTIVAR PUNTOS VISUALMENTE
+  // =================================================
+
+  activateConnectionPoint(
+    pendingConnection.nodeId,
+    pendingConnection.side
+  );
+
+  activateConnectionPoint(
+    nodeId,
+    side
+  );
+
+  // =================================================
+  // FINALIZAR
+  // =================================================
+
+  setPendingConnection(null);
+};
 
   // =====================================================
   // ELIMINAR NODO
@@ -1621,153 +1691,228 @@ const InfinityCanvas: React.FC = () => {
   };
 
   // =====================================================
-  // POSICIÓN DE PUNTO DE CONEXIÓN
-  // =====================================================
+// POSICIÓN DE PUNTO DE CONEXIÓN
+// =====================================================
 
-  /**
-   * Calcula las coordenadas de un punto de conexión
-   * según el lado del nodo.
-   */
-  const getConnectionPointPosition = (
-    node: {
-      position: NodePosition;
-    },
-    side: ConnectionSide
-  ) => {
+const getConnectionPointPosition = (
+  nodeId: string,
 
-    const cardLeft =
-      node.position.x +
-      NODE_LEFT_OFFSET;
+  node: {
+    position: NodePosition;
+  },
 
-    const cardTop =
-      node.position.y +
-      NODE_TOP_OFFSET;
+  side: ConnectionSide
+) => {
 
-    if (side === 'top') {
-      return {
-        x:
-          cardLeft +
-          NODE_WIDTH / 2,
+  // -----------------------------------------------
+  // Tamaño real del Chunk.
+  //
+  // Si todavía no ha sido medido usamos 250
+  // solamente como valor temporal.
+  // -----------------------------------------------
 
-        y:
-          cardTop,
-      };
-    }
+  const size =
+    chunkSizes[nodeId] ?? {
+      width: NODE_WIDTH,
+      height: 250,
+    };
 
-    if (side === 'bottom') {
-      return {
-        x:
-          cardLeft +
-          NODE_WIDTH / 2,
+  // -----------------------------------------------
+  // Posición real de la tarjeta.
+  //
+  // ChunkNode tiene:
+  //
+  // paddingHorizontal: 12
+  // paddingTop: 24
+  // -----------------------------------------------
 
-        y:
-          cardTop +
-          NODE_HEIGHT,
-      };
-    }
+  const cardLeft =
+    node.position.x +
+    NODE_LEFT_OFFSET;
 
-    if (side === 'left') {
-      return {
-        x:
-          cardLeft,
+  const cardTop =
+    node.position.y +
+    NODE_TOP_OFFSET;
 
-        y:
-          cardTop +
-          NODE_HEIGHT / 2,
-      };
-    }
+  // -----------------------------------------------
+  // ARRIBA
+  // -----------------------------------------------
 
-    // Por defecto, el punto corresponde al lado derecho.
+  if (side === 'top') {
+
     return {
       x:
         cardLeft +
-        NODE_WIDTH,
+        size.width / 2,
+
+      y:
+        cardTop,
+    };
+  }
+
+  // -----------------------------------------------
+  // ABAJO
+  // -----------------------------------------------
+
+  if (side === 'bottom') {
+
+    return {
+      x:
+        cardLeft +
+        size.width / 2,
 
       y:
         cardTop +
-        NODE_HEIGHT / 2,
+        size.height,
     };
+  }
+
+  // -----------------------------------------------
+  // IZQUIERDA
+  // -----------------------------------------------
+
+  if (side === 'left') {
+
+    return {
+      x:
+        cardLeft,
+
+      y:
+        cardTop +
+        size.height / 2,
+    };
+  }
+
+  // -----------------------------------------------
+  // DERECHA
+  // -----------------------------------------------
+
+  return {
+    x:
+      cardLeft +
+      size.width,
+
+    y:
+      cardTop +
+      size.height / 2,
   };
+};
 
-  // =====================================================
-  // RENDERIZAR CONEXIÓN
-  // =====================================================
 
-  /**
-   * Dibuja una línea entre dos puntos del canvas.
-   */
-  const renderConnection = (
-    connection: CanvasConnection
-  ) => {
+// =====================================================
+// RENDERIZAR CONEXIÓN
+// =====================================================
 
-    const fromNode =
-      getNodeById(
-        connection.fromNodeId
-      );
+const renderConnection = (
+  connection: CanvasConnection
+) => {
 
-    const toNode =
-      getNodeById(
-        connection.toNodeId
-      );
-
-    // Si alguno de los nodos ya no existe,
-    // no se puede renderizar la conexión.
-    if (!fromNode || !toNode) {
-      return null;
-    }
-
-    const start =
-      getConnectionPointPosition(
-        fromNode.node,
-        connection.fromSide
-      );
-
-    const end =
-      getConnectionPointPosition(
-        toNode.node,
-        connection.toSide
-      );
-
-    // Distancia horizontal y vertical.
-    const dx =
-      end.x - start.x;
-
-    const dy =
-      end.y - start.y;
-
-    // Longitud de la línea.
-    const length =
-      Math.sqrt(
-        dx * dx +
-        dy * dy
-      );
-
-    // Ángulo de rotación de la línea.
-    const angle =
-      Math.atan2(dy, dx) *
-      (180 / Math.PI);
-
-    return (
-      <View
-        key={connection.id}
-        pointerEvents="none"
-        style={[
-          styles.connectionLine,
-          {
-            left: start.x,
-            top: start.y,
-            width: length,
-
-            transform: [
-              {
-                rotate: `${angle}deg`,
-              },
-            ],
-          },
-        ]}
-      />
+  const fromNode =
+    getNodeById(
+      connection.fromNodeId
     );
-  };
+
+  const toNode =
+    getNodeById(
+      connection.toNodeId
+    );
+
+  // Si alguno de los nodos ya no existe,
+  // no se puede renderizar.
+  if (!fromNode || !toNode) {
+    return null;
+  }
+
+  // -----------------------------------------------
+  // PUNTO DE ORIGEN
+  // -----------------------------------------------
+
+  const start =
+    getConnectionPointPosition(
+      connection.fromNodeId,
+      fromNode.node,
+      connection.fromSide
+    );
+
+  // -----------------------------------------------
+  // PUNTO DE DESTINO
+  // -----------------------------------------------
+
+  const end =
+    getConnectionPointPosition(
+      connection.toNodeId,
+      toNode.node,
+      connection.toSide
+    );
+
+  // -----------------------------------------------
+  // DISTANCIA
+  // -----------------------------------------------
+
+  const dx =
+    end.x -
+    start.x;
+
+  const dy =
+    end.y -
+    start.y;
+
+  // -----------------------------------------------
+  // LONGITUD
+  // -----------------------------------------------
+
+  const length =
+    Math.sqrt(
+      dx * dx +
+      dy * dy
+    );
+
+  // -----------------------------------------------
+  // ÁNGULO
+  // -----------------------------------------------
+
+  const angle =
+    Math.atan2(
+      dy,
+      dx
+    ) *
+    (180 / Math.PI);
+
+  // -----------------------------------------------
+  // LÍNEA
+  // -----------------------------------------------
+
+  return (
+    <View
+      key={connection.id}
+
+      pointerEvents="none"
+
+      style={[
+        styles.connectionLine,
+
+        {
+          left:
+            start.x,
+
+          top:
+            start.y,
+
+          width:
+            length,
+
+          transform: [
+            {
+              rotate:
+                `${angle}deg`,
+            },
+          ],
+        },
+      ]}
+    />
+  );
+};
+
 
   // =====================================================
   // CARGAR CANVAS
@@ -2188,99 +2333,117 @@ const InfinityCanvas: React.FC = () => {
                 ]}
               >
 
-                <ChunkNode
+<ChunkNode
 
-                  title={
-                    item.title
-                  }
+  title={
+    item.title
+  }
 
-                  description={
-                    item.description
-                  }
+  description={
+    item.description
+  }
 
-                  position={
-                    item.position
-                  }
+  position={
+    item.position
+  }
 
-                  status={
-                    item.status
-                  }
+  status={
+    item.status
+  }
 
-                  selected={
-                    selectedNodeId ===
-                    item.id
-                  }
+  selected={
+    selectedNodeId ===
+    item.id
+  }
 
-                  onSelect={() =>
-                    handleSelectNode(
-                      item.id
-                    )
-                  }
+  onSelect={() =>
+    handleSelectNode(
+      item.id
+    )
+  }
 
-                  onMove={(
-                    startX,
-                    startY,
-                    dx,
-                    dy
-                  ) =>
-                    handleMoveChunk(
-                      item.id,
-                      startX,
-                      startY,
-                      dx,
-                      dy
-                    )
-                  }
+  onMove={(
+    startX,
+    startY,
+    dx,
+    dy
+  ) =>
+    handleMoveChunk(
+      item.id,
+      startX,
+      startY,
+      dx,
+      dy
+    )
+  }
 
-                  connections={
-                    item.connections
-                  }
+  connections={
+    item.connections
+  }
 
-                  onTitleChange={
-                    newTitle =>
-                      handleChangeChunkTitle(
-                        item.id,
-                        newTitle
-                      )
-                  }
+  onTitleChange={
+    newTitle =>
+      handleChangeChunkTitle(
+        item.id,
+        newTitle
+      )
+  }
 
-                  onDescriptionChange={
-                    newDescription =>
-                      handleChangeChunkDescription(
-                        item.id,
-                        newDescription
-                      )
-                  }
+  onDescriptionChange={
+    newDescription =>
+      handleChangeChunkDescription(
+        item.id,
+        newDescription
+      )
+  }
 
-                  onStatusChange={
-                    newStatus =>
-                      handleChangeChunkStatus(
-                        item.id,
-                        newStatus
-                      )
-                  }
+  onStatusChange={
+    newStatus =>
+      handleChangeChunkStatus(
+        item.id,
+        newStatus
+      )
+  }
 
-                  onClose={() =>
-                    handleRemoveNode(
-                      item.id
-                    )
-                  }
+  onClose={() =>
+    handleRemoveNode(
+      item.id
+    )
+  }
 
-                  onPressSubStep={() =>
-                    handleAddSubStep(
-                      item.id
-                    )
-                  }
+  onPressSubStep={() =>
+    handleAddSubStep(
+      item.id
+    )
+  }
 
-                  onConnectPointPress={
-                    side =>
-                      handleConnectionPointPress(
-                        item.id,
-                        side
-                      )
-                  }
+  // -----------------------------------------------
+  // NUEVO: tamaño real
+  // -----------------------------------------------
 
-                />
+  onLayout={(
+    width,
+    height
+  ) =>
+    handleChunkLayout(
+      item.id,
+      width,
+      height
+    )
+  }
+
+  // -----------------------------------------------
+  // CONEXIONES
+  // -----------------------------------------------
+
+  onConnectPointPress={
+    side =>
+      handleConnectionPointPress(
+        item.id,
+        side
+      )
+  }
+/>
 
               </View>
             ))}
