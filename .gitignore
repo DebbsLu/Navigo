@@ -9,6 +9,11 @@ dist/
 web-build/
 expo-env.d.ts
 
+# Variables de entorno y secretos
+.env
+.env.*
+!.env.example
+
 # Native
 .kotlin/
 *.orig.*

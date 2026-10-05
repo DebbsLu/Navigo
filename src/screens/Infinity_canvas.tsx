@@ -887,18 +887,9 @@ const InfinityCanvas: React.FC = () => {
   // =====================================================
 
   /**
-   * Crea una solución escrita manualmente por el usuario.
+   * Crea una solución escrita manualmente por el usuario. SE ELIMINA :D
    */
-  const handleAddCustomSolution = (
-    text: string,
-    problem: ProblemType
-  ) => {
-    createProblemAndSolution(
-      problem,
-      text,
-      'Solución personalizada por el usuario.'
-    );
-  };
+
 
   // =====================================================
   // CAMBIAR ESTADO DE SOLUCIÓN
@@ -2671,9 +2662,6 @@ const InfinityCanvas: React.FC = () => {
                 handleSelectSolution
               }
 
-              onAddCustomSolution={
-                handleAddCustomSolution
-              }
 
             />
 

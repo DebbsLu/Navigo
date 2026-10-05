@@ -12,8 +12,6 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 
-import { generateAISolutions } from '../services/aiSolutions';
-
 import {
   PROBLEM_DATA,
   ProblemCategory,
@@ -32,6 +30,12 @@ interface ModalProblemasProps {
     category?: ProblemCategory
   ) => void;
 
+  //VAMOS A QUITAR ESTO PORQUE YA NO LO VAMOS A LLAMAR. 
+  onAddCustomSolution?: (
+    text: string,
+    problem: ProblemType
+  ) => void;
+
   style?: ViewStyle;
 }
 
@@ -42,7 +46,7 @@ type ModalStep =
 
 const ModalProblemas: React.FC<ModalProblemasProps> = ({
   onSelectSolution,
-  
+  onAddCustomSolution,//Estoy de acá lo vamos a quitar luego, porque se dejará de usar. 
   style,
 }) => {
   // =====================================================
@@ -90,47 +94,28 @@ const ModalProblemas: React.FC<ModalProblemasProps> = ({
   };
 
   // =====================================================
-  // PROBLEMA PERSONALIZADO CON IA
+  // PROBLEMA PERSONALIZADO
   // =====================================================
 
-const handleSendCustomProblem = async () => {
-  const text = customText.trim();
+  const handleSendCustomProblem = () => {
+    const text = customText.trim();
 
-  if (!text || isGeneratingAI) {
-    return;
-  }
+    if (!text) {
+      return;
+    }
 
-  const customProblem: ProblemType = {
-    id: `custom_problem_${Date.now()}`,
-    title: text,
-    description:
-      'Problema personalizado por el usuario.',
-    solutions: [],
-  };
+    const customProblem: ProblemType = {
+      id: `custom_problem_${Date.now()}`,
+      title: text,
+      description:
+        'Problema personalizado por el usuario.',
+      solutions: [],
+    };
 
-  setSelectedProblem(customProblem);
-  setCustomText('');
-  setIsGeneratingAI(true);
-
-  try {
-    const solutions = await generateAISolutions(text);
-
-    setAiSolutions(solutions);
+    setSelectedProblem(customProblem);
+    setCustomText('');
     setStep('solutions');
-
-  } catch (error) {
-    console.error(
-      'Error generando soluciones con IA:',
-      error
-    );
-
-    // Aquí podemos mostrar un mensaje de error
-    // al usuario posteriormente.
-
-  } finally {
-    setIsGeneratingAI(false);
-  }
-};
+  };
 
   // =====================================================
   // SELECCIONAR SOLUCIÓN
@@ -155,7 +140,20 @@ const handleSendCustomProblem = async () => {
   // SOLUCIÓN PERSONALIZADA
   // =====================================================
 
+  const handleSendCustomSolution = () => {
+    const text = customText.trim();
 
+    if (!text || !selectedProblem) {
+      return;
+    }
+
+    if (onAddCustomSolution) {
+      onAddCustomSolution(
+        text,
+        selectedProblem
+      );
+    }
+  };
 
   // =====================================================
   // VOLVER
@@ -214,10 +212,7 @@ const handleSendCustomProblem = async () => {
     step === 'solutions' &&
     selectedProblem
   ) {
-    options =
-      selectedProblem.solutions.length > 0
-        ? selectedProblem.solutions
-        : aiSolutions;
+    options = selectedProblem.solutions;
   }
 
   // =====================================================
@@ -401,72 +396,57 @@ const handleSendCustomProblem = async () => {
 
       </View>
 
-    {/* =================================================
-        INPUT PERSONALIZADO / IA
-    ================================================= */}
+      {/* =================================================
+          INPUT PERSONALIZADO
+      ================================================= */}
 
-    {step !== 'solutions' && (
-      <>
-        <Text
-          style={[
-            styles.questionText,
-            styles.secondQuestion,
-          ]}
-        >
-          {step === 'problems'
-            ? '¿No encuentras tu problema?'
-            : 'O escribe el problema que tienes:'}
-        </Text>
+      <Text
+        style={[
+          styles.questionText,
+          styles.secondQuestion,
+        ]}
+      >
+        {step === 'solutions'
+          ? 'O escribe tu propia solución:'
+          : step === 'problems'
+          ? '¿No encuentras tu problema?'
+          : 'O escribe el problema que tienes:'}
+      </Text>
 
-        <View style={styles.inputContainer}>
+      <View style={styles.inputContainer}>
 
-          <TextInput
-            style={styles.textInput}
-            placeholder="Escribe tu problema..."
-            placeholderTextColor="#5978B7"
-            value={customText}
-            onChangeText={setCustomText}
-            multiline
-            editable={!isGeneratingAI}
-          />
-
-          <TouchableOpacity
-            activeOpacity={0.7}
-            style={[
-              styles.sendButton,
-              isGeneratingAI && styles.sendButtonDisabled,
-            ]}
-            onPress={handleSendCustomProblem}
-            disabled={isGeneratingAI}
-          >
-            <Ionicons
-              name="arrow-forward"
-              size={18}
-              color="#FFFFFF"
-            />
-          </TouchableOpacity>
-
-        </View>
-      </>
-    )}
-
-    {/* =================================================
-        ESTADO DE GENERACIÓN DE IA
-    ================================================= */}
-
-    {isGeneratingAI && (
-      <View style={styles.aiLoadingContainer}>
-        <Ionicons
-          name="sparkles"
-          size={22}
-          color="#FFFFFF"
+        <TextInput
+          style={styles.textInput}
+          placeholder={
+            step === 'solutions'
+              ? 'Escribe una solución...'
+              : 'Escribe tu problema...'
+          }
+          placeholderTextColor="#5978B7"
+          value={customText}
+          onChangeText={setCustomText}
+          multiline={
+            step === 'solutions'
+          }
         />
 
-        <Text style={styles.aiLoadingText}>
-          Pensando en soluciones...
-        </Text>
+        <TouchableOpacity
+          activeOpacity={0.7}
+          style={styles.sendButton}
+          onPress={
+            step === 'solutions'
+              ? handleSendCustomSolution
+              : handleSendCustomProblem
+          }
+        >
+          <Ionicons
+            name="arrow-forward"
+            size={18}
+            color="#FFFFFF"
+          />
+        </TouchableOpacity>
+
       </View>
-    )}
 
     </LinearGradient>
   );
@@ -487,25 +467,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
-  
-aiLoadingContainer: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  justifyContent: 'center',
-  marginTop: 18,
-  paddingVertical: 12,
-  gap: 8,
-},
 
-aiLoadingText: {
-  color: '#FFFFFF',
-  fontSize: 14,
-  fontWeight: '500',
-},
-
-sendButtonDisabled: {
-  opacity: 0.5,
-},
   backButton: {
     width: 34,
     height: 34,
