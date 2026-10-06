@@ -56,6 +56,10 @@ import {
   loadMissions,
 } from '../services/blocksStorage';
 
+// Sincroniza las reglas guardadas en React Native
+// con el sistema nativo de bloqueo de Android.
+import { syncBlocksWithAndroid } from '../services/blockEnforcement';
+
 /* Paleta */
 const C = {
   purple: '#853ACF',
@@ -452,6 +456,10 @@ const handleSelectTab = (index: number) => {
       const block = buildBlock(form, missions, steps);
       const updated = await addBlock(block);
       setBlocks(updated); // la lista ya muestra el bloqueo nuevo
+
+      //    Android reemplazará su copia anterior por esta lista.
+      await syncBlocksWithAndroid(updated);
+
       setListError(null);
       setModalVisible(false); // "redirige" a la lista de bloqueos
     } catch (e) {
@@ -466,7 +474,21 @@ const handleSelectTab = (index: number) => {
   const handleDelete = async (block: Block) => {
     setDeleteError(null);
     try {
-      setBlocks(await deleteBlock(block.id));
+      
+      // 1. Eliminamos el bloqueo de AsyncStorage.
+      const updated = await deleteBlock(block.id);
+
+      // 2. Actualizamos la lista visual.
+      setBlocks(updated);
+
+      // 3. Sincronizamos nuevamente todos los bloqueos
+      //    con Android.
+      //
+      //    Esto es importante porque Android necesita saber
+      //    que la regla eliminada ya no debe aplicarse.
+      await syncBlocksWithAndroid(updated);
+
+
     } catch (e) {
       console.error('[Blocks] Error al borrar:', e);
       setDeleteError(errorMessage(e, 'No se pudo eliminar el bloqueo. Inténtalo de nuevo.'));

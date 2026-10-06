@@ -49,58 +49,100 @@ const demo = (warning: string): InstalledAppsResult => ({
  * Devuelve las apps instaladas (ordenadas por nombre, sin repetidos).
  * @param forceRefresh ignora la caché y vuelve a escanear.
  */
-export const getInstalledApps = async (forceRefresh = false): Promise<InstalledAppsResult> => {
+export const getInstalledApps = async (
+  forceRefresh = false,
+): Promise<InstalledAppsResult> => {
   if (cache && !forceRefresh) return cache;
 
   if (Platform.OS !== 'android') {
-    return demo('iOS no permite listar las apps instaladas. Se muestra una lista de ejemplo.');
+    return demo(
+      'iOS no permite listar las apps instaladas. Se muestra una lista de ejemplo.',
+    );
   }
 
   try {
-    // Revisamos PRIMERO si el módulo nativo existe en esta app. En Expo Go no
-    // existe; si lo importáramos igual, Expo mostraría una pantalla roja de
-    // error en desarrollo. Con esta revisión simplemente usamos la lista de ejemplo.
-    if (!requireOptionalNativeModule('ExpoAndroidAppList')) {
-      return demo(
-        'Estás en Expo Go, que no puede leer tus apps. Se muestra una lista de ejemplo. Usa un development build para ver las reales.',
+    // Comprobamos si el módulo nativo está realmente disponible.
+    const nativeModule = requireOptionalNativeModule('ExpoAndroidAppList');
+
+    console.log(
+      '[installedApps] ExpoAndroidAppList:',
+      nativeModule,
+    );
+
+    if (!nativeModule) {
+      throw new Error(
+        'ExpoAndroidAppList NO está disponible en el build nativo.',
       );
     }
 
-    // Import dinámico: si el módulo nativo no existe (Expo Go) falla AQUÍ,
-    // dentro del try/catch, y no tumba toda la aplicación al arrancar.
+    // Importamos el paquete JS.
     const mod = await import('expo-android-app-list');
-    // getAll() devuelve un arreglo de { packageName, appName, versionName, ... }.
-    const raw: unknown = await mod.ExpoAndroidAppList.getAll();
-    if (!Array.isArray(raw)) throw new Error('getAll() no devolvió una lista.');
 
-    // Quitamos repetidos por packageName y entradas sin datos.
+    // Obtenemos las aplicaciones reales.
+    const raw: unknown =
+      await mod.ExpoAndroidAppList.getAll();
+
+    if (!Array.isArray(raw)) {
+      throw new Error('getAll() no devolvió una lista.');
+    }
+
+    // Quitamos repetidos por packageName.
     const byPackage = new Map<string, InstalledAppInfo>();
+
     for (const item of raw) {
-      const a = item as { packageName?: unknown; appName?: unknown };
-      if (typeof a?.packageName !== 'string' || a.packageName === '') continue;
-      if (byPackage.has(a.packageName)) continue;
+      const a = item as {
+        packageName?: unknown;
+        appName?: unknown;
+      };
+
+      if (
+        typeof a?.packageName !== 'string' ||
+        a.packageName === ''
+      ) {
+        continue;
+      }
+
+      if (byPackage.has(a.packageName)) {
+        continue;
+      }
+
       byPackage.set(a.packageName, {
         packageName: a.packageName,
-        appName: typeof a.appName === 'string' && a.appName !== '' ? a.appName : a.packageName,
-        // Este módulo no entrega iconos en la lista; se muestra un icono genérico.
+        appName:
+          typeof a.appName === 'string' &&
+          a.appName !== ''
+            ? a.appName
+            : a.packageName,
       });
     }
 
-    const apps = Array.from(byPackage.values()).sort((a, b) =>
-      a.appName.localeCompare(b.appName, 'es', { sensitivity: 'base' }),
+    const apps = Array.from(byPackage.values()).sort(
+      (a, b) =>
+        a.appName.localeCompare(
+          b.appName,
+          'es',
+          { sensitivity: 'base' },
+        ),
     );
 
-    // Si el escaneo devolvió vacío algo falló (p. ej. falta el permiso).
     if (apps.length === 0) {
-      return demo('No se encontraron apps. Revisa el permiso QUERY_ALL_PACKAGES. Se muestra una lista de ejemplo.');
+      return demo(
+        'No se encontraron apps. Revisa el permiso QUERY_ALL_PACKAGES.',
+      );
     }
 
-    cache = { apps, isDemo: false };
+    cache = {
+      apps,
+      isDemo: false,
+    };
+
     return cache;
   } catch (e) {
-    console.warn('[installedApps] No se pudo leer la lista real de apps:', e);
-    return demo(
-      'Para ver tus apps reales necesitas un development build (no Expo Go). Se muestra una lista de ejemplo.',
+    console.error(
+      '[installedApps] ERROR REAL:',
+      e,
     );
+
+    throw e;
   }
 };
