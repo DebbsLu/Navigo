@@ -60,7 +60,6 @@ Navigo/
 │       ├── Reminders.tsx
 │       └── Task_home.tsx
 ├── .gitignore
-├── AGENTS.md
 ├── app.json
 ├── App.tsx
 ├── index.ts
