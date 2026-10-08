@@ -1,7 +1,7 @@
 # Navigo
 
 
-**Navigo** es una aplicación móvil desarrollada con React Native y Expo, orientada a la navegación interactiva y renderizado de canvas basándose en nodos o fragmentos (*chunk nodes*)[cite: 10]. Permite interactuar mediante gestos táctiles con capas de lienzo, gestionar menús flotantes e inspeccionar proximidades e información detallada de nodos.
+**Navigo** es una aplicación móvil desarrollada con React Native y Expo, orientada a la navegación interactiva y renderizado de canvas basándose en nodos o fragmentos (*chunk nodes*). Permite interactuar mediante gestos táctiles con capas de lienzo, gestionar menús flotantes e inspeccionar proximidades e información detallada de nodos.
 
 ---
 
@@ -55,6 +55,9 @@ Navigo/
 ├── App.tsx
 ├── index.ts
 ├── LICENSE
+├── package-lock.json
+├── package.json
+└── tsconfig.json
 
 ## 🚀 Requisitos Previos
 
@@ -84,9 +87,10 @@ Asegúrate de contar con las siguientes herramientas instaladas en tu entorno de
 Una vez iniciado el servidor de Expo, puedes interactuar con la app mediante los siguientes comandos en la terminal:
 
 - **Dispositivo Físico:** Escanea el código QR generado en la terminal con la cámara (iOS) o la app **Expo Go** (Android).
+
 - **Emulador de Android:** Presiona `a` en la terminal.
 - **Simulador de iOS:** Presiona `i` en la terminal.
 - **Modo Web:** Presiona `w` para abrir la versión en el navegador.
-├── package-lock.json
-├── package.json
-└── tsconfig.json
+
+
+
