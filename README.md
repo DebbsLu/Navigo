@@ -5,6 +5,16 @@
 
 ---
 
+## 📅 Organización Diaria y Rutina Continua
+
+**Navigo** está pensada para ser una herramienta de uso diario (*day-to-day app*) que simplifica la estructuración de la jornada personal y académica:
+
+- **Planificación por Días:** Visualiza y distribuye la carga de trabajo en bloques diarios manejables, evitando la saturación de ver listas de pendientes acumuladas e interminables.
+- **Flujo de Ejecución Diario:** Acompaña al usuario durante sus rutinas cotidianas, facilitando el seguimiento en tiempo real de qué hacer en cada momento del día según sus niveles de energía.
+- **Adaptabilidad a Imprevistos:** Permite reestructurar o mover tareas de un día a otro de forma visual e intuitiva cuando la jornada no sale exactamente como se planeó.
+
+---
+
 ## 🛠️ Tecnologías Utilizadas
 
 - **Framework:** React Native (Expo SDK 52)
@@ -58,6 +68,8 @@ Navigo/
 ├── package-lock.json
 ├── package.json
 └── tsconfig.json
+```
+---
 
 ## 🚀 Requisitos Previos
 
